@@ -1,5 +1,5 @@
 world:
-  name: treitlstrasse_v2
+  name: gbr
 agents:
   - id: A
     vehicle:
@@ -7,4 +7,4 @@ agents:
       sensors: [lidar, pose, velocity]
     task:
       task_name: maximize_progress_action_reg
-      params: {laps: 10, time_limit: 180.0, terminate_on_collision: True, collision_reward: -1.0}
+      params: {laps: 10, time_limit: 180.0, terminate_on_collision: True, collision_reward: -1.0, action_reg: 0.25}
