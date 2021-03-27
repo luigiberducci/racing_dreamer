@@ -29,7 +29,7 @@ os.environ['MUJOCO_GL'] = 'egl'
 sys.path.append(str(pathlib.Path(__file__).parent))
 
 
-# tf.config.run_functions_eagerly(run_eagerly=True)
+tf.config.run_functions_eagerly(run_eagerly=True)
 
 def define_config():
     """
@@ -44,7 +44,7 @@ def define_config():
     config.eval_every = 1e4
     config.log_every = 1e3
     config.log_scalars = True
-    config.log_images = True
+    config.log_images = False
     config.log_videos = True
     config.gpu_growth = True
     config.precision = 32
@@ -158,6 +158,8 @@ def create_log_dirs(config):
     suffix = f"{config.seed}_{time.time()}"
     # create log dirs
     logdir = pathlib.Path(f'{config.logdir}/{prefix}_{model_archs}_{params}_{suffix}')
+    debugdir = logdir / 'debug'                      # where storing the debug logs
+    debugdir.mkdir(parents=True, exist_ok=True)
     datadir = logdir / 'episodes'                   # where storing the episodes as np files
     checkpoint_dir = logdir / 'checkpoints'         # where storing model checkpoints
     best_checkpoint_dir = checkpoint_dir / 'best'   # where storing the best model checkpoint
@@ -239,12 +241,16 @@ def main(config):
     best_test_return = 0.0      # for storing the best model so far
     while step < config.steps:
         # Evaluation phase
+        agent._actor.reset_debug_structs()
         print('[Info] Start evaluation.')
         eval_agent = functools.partial(agent, training=False)
         eval_agents = [eval_agent for _ in range(train_env.n_agents)]  # for multi-agent compatibility
         _, cum_reward = tools.simulate(eval_agents, test_env, config, datadir, writer, prefix='test',
                                        episodes=config.eval_episodes, agents_ids=agent_ids)
         writer.flush()
+        # Save debug info of action network
+        agent._actor.save_debug_data(config.logdir / 'debug', steps=step)
+
         # Save best model
         if cum_reward > best_test_return:
             best_test_return = cum_reward

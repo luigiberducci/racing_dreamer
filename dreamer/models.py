@@ -238,7 +238,7 @@ class Dreamer(tools.Module):
         self._metrics['model_loss'].update_state(model_loss)
         self._metrics['value_loss'].update_state(value_loss)
         self._metrics['actor_loss'].update_state(actor_loss)
-        self._metrics['action_ent'].update_state(self._actor(feat).entropy())
+        self._metrics['action_ent'].update_state(self._actor(feat, training=True).entropy())
 
     def _image_summaries(self, data, embed, image_pred):
         summary_size = 6  # nr readme to be shown
@@ -543,6 +543,22 @@ class ActionDecoder(tools.Module):
         self._min_std = min_std
         self._init_std = init_std
         self._mean_scale = mean_scale
+        # debug action network structures
+        self._output_mean, self._output_std = [], []
+        self._scaled_mean, self._scaled_std = [], []
+        self._action_samples = []
+
+    def reset_debug_structs(self):
+        self._output_mean, self._output_std = [], []
+        self._scaled_mean, self._scaled_std = [], []
+        self._action_samples = []
+
+    def save_debug_data(self, debugdir, steps):
+        filepath = f"{debugdir}/debug_actor_{self._dist}_steps_{steps}.npz"
+        np.savez_compressed(filepath, output_mean=self._output_mean, output_std=self._output_std,
+                            scaled_mean=self._scaled_mean, scaled_std=self._scaled_std,
+                            action_samples=self._action_samples)
+
 
     def __call__(self, features, training=False):
         raw_init_std = np.log(np.exp(self._init_std) - 1)
@@ -553,12 +569,21 @@ class ActionDecoder(tools.Module):
             # https://www.desmos.com/calculator/rcmcf5jwe7
             x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
             mean, std = tf.split(x, 2, -1)
+            if not training:
+                self._output_mean.append(mean.numpy())
+                self._output_std.append(std.numpy())
             mean = self._mean_scale * tf.tanh(mean / self._mean_scale)
             std = tf.nn.softplus(std + raw_init_std) + self._min_std
+            if not training:
+                self._scaled_mean.append(mean.numpy())
+                self._scaled_std.append(std.numpy())
             dist = tfd.Normal(mean, std)
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
             dist = tools.SampleDist(dist)
+            if not training:    # sample 10 actions, just to have an idea of where they fall
+                for _ in range(10):
+                    self._action_samples.append(dist.sample().numpy())
         elif self._dist == 'normalized_tanhtransformed_normal':
             # Normalized variation of the original actor: (mu,std) normalized, then create tanh normal from them
             # The normalization params (moving avg, std) are updated only during training
