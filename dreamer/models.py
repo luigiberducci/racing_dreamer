@@ -544,6 +544,7 @@ class ActionDecoder(tools.Module):
         self._init_std = init_std
         self._mean_scale = mean_scale
         # debug action network structures
+        self._debug = False
         self._output_mean, self._output_std = [], []
         self._scaled_mean, self._scaled_std = [], []
         self._action_samples = []
@@ -569,34 +570,44 @@ class ActionDecoder(tools.Module):
             # https://www.desmos.com/calculator/rcmcf5jwe7
             x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
             mean, std = tf.split(x, 2, -1)
-            if not training:
+            if self._debug and not training:
                 self._output_mean.append(mean.numpy())
                 self._output_std.append(std.numpy())
             mean = self._mean_scale * tf.tanh(mean / self._mean_scale)
             std = tf.nn.softplus(std + raw_init_std) + self._min_std
-            if not training:
+            if self._debug and not training:
                 self._scaled_mean.append(mean.numpy())
                 self._scaled_std.append(std.numpy())
             dist = tfd.Normal(mean, std)
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
             dist = tools.SampleDist(dist)
-            if not training:    # sample 10 actions, just to have an idea of where they fall
+            if self._debug and training:    # sample 10 actions, just to have an idea of where they fall
                 for _ in range(10):
                     self._action_samples.append(dist.sample().numpy())
         elif self._dist == 'normalized_tanhtransformed_normal':
             # Normalized variation of the original actor: (mu,std) normalized, then create tanh normal from them
             # The normalization params (moving avg, std) are updated only during training
             x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
+            if self._debug and training:
+                mean, std = tf.split(x, 2, -1)
+                self._output_mean.append(mean.numpy())
+                self._output_std.append(std.numpy())
             x = tf.reshape(x, [-1, 2 * self._size])
             x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)  # `training` true only in imagination
             x = tf.reshape(x, [*features.shape[:-1], -1])
             mean, std = tf.split(x, 2, -1)
             std = tf.nn.softplus(std) + self._min_std  # to have positive values
+            if self._debug and not training:
+                self._scaled_mean.append(mean.numpy())
+                self._scaled_std.append(std.numpy())
             dist = tfd.Normal(mean, std)
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
             dist = tools.SampleDist(dist)
+            if self._debug and training:    # sample 10 actions, just to have an idea of where they fall
+                for _ in range(10):
+                    self._action_samples.append(dist.sample().numpy())
         else:
             raise NotImplementedError(self._dist)
         return dist
