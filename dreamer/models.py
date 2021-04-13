@@ -544,7 +544,7 @@ class ActionDecoder(tools.Module):
         self._init_std = init_std
         self._mean_scale = mean_scale
         # debug action network structures
-        self._debug = False
+        self._debug = True
         self._output_mean, self._output_std = [], []
         self._scaled_mean, self._scaled_std = [], []
         self._action_samples = []
@@ -582,14 +582,14 @@ class ActionDecoder(tools.Module):
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
             dist = tools.SampleDist(dist)
-            if self._debug and training:    # sample 10 actions, just to have an idea of where they fall
+            if self._debug and not training:    # sample 10 actions, just to have an idea of where they fall
                 for _ in range(10):
                     self._action_samples.append(dist.sample().numpy())
         elif self._dist == 'normalized_tanhtransformed_normal':
             # Normalized variation of the original actor: (mu,std) normalized, then create tanh normal from them
             # The normalization params (moving avg, std) are updated only during training
             x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
-            if self._debug and training:
+            if self._debug and not training:
                 mean, std = tf.split(x, 2, -1)
                 self._output_mean.append(mean.numpy())
                 self._output_std.append(std.numpy())
@@ -605,7 +605,7 @@ class ActionDecoder(tools.Module):
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
             dist = tools.SampleDist(dist)
-            if self._debug and training:    # sample 10 actions, just to have an idea of where they fall
+            if self._debug and not training:    # sample 10 actions, just to have an idea of where they fall
                 for _ in range(10):
                     self._action_samples.append(dist.sample().numpy())
         else:

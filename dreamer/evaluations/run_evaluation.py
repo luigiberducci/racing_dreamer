@@ -8,7 +8,7 @@ import time
 
 from racing_agent import RacingAgent
 from make_env import make_multi_track_env, wrap_wrt_track
-
+import matplotlib.pyplot as plt
 
 tf.config.run_functions_eagerly(run_eagerly=True)  # we need it to resume a model without need of same batchlen
 
@@ -55,14 +55,25 @@ def eval_agent(base_env, agent, action_repeat, basedir, writer, checkpoint_id, s
             obs = env.reset()
             done = False
             agent_state = None
+            motors, steerings = [], []
             while not done:
                 obs = {id: {k: np.stack([v]) for k, v in o.items()} for id, o in
                        obs.items()}  # dream needs size (1, 1080)
                 action, agent_state = agent.action(obs=obs['A'], reset=np.array([done]), state=agent_state)
+                motors.append(action[0])
+                steerings.append(action[1])
                 action = {'A': np.array(action)}
                 obs, rewards, dones, info = env.step(action)
                 done = dones['A']
-
+            plt.clf()
+            tm = time.time()
+            plt.plot(motors[:200], label="motor")
+            plt.title("motor")
+            plt.savefig(f"{basedir}/motor_checkpoint_{checkpoint_id}_{tm}.png")
+            plt.clf()
+            plt.plot(steerings[:200], label="steering")
+            plt.title("steering")
+            plt.savefig(f"{basedir}/steering_checkpoint_{checkpoint_id}_{tm}.png")
 
 def make_log_dir(args):
     out_dir = args.outdir / f'eval_{args.agent}_{args.trained_on.replace("_", "")}_{args.obs_type.replace("_", "")}_{time.time()}'
@@ -73,8 +84,8 @@ def make_log_dir(args):
 
 
 def main(args):
-    action_repeat = 8 if args.agent == "dreamer" else 4
-    rendering = False
+    action_repeat = 4 if args.agent == "dreamer" else 4
+    rendering = True
     basedir, writer = make_log_dir(args)
     base_env = make_multi_track_env(args.tracks, action_repeat=action_repeat,
                                     rendering=rendering, is_dreamer=args.agent == "dreamer")
@@ -91,16 +102,20 @@ def main(args):
             # load the model checkpoint and copy it to the log dir
             agent.load(checkpoint)
             copy_checkpoint(args.agent, checkpoint, basedir, checkpoint_id=i + 1)
+            debugdir = basedir / "debug"
+            debugdir.mkdir(exist_ok=True)
+            #agent._agent._actor.reset_debug_structs()
             eval_agent(base_env, agent, action_repeat, basedir, writer, i, save_trajectories=args.save_trajectories)
+            #agent._agent._actor.save_debug_data(debugdir, steps=500000)
 
 
 def parse():
-    tracks = ['austria', 'columbia', 'barcelona', 'gbr', 'treitlstrasse_v2']
+    tracks = ['austria', 'columbia', 'barcelona', 'gbr', 'treitlstrasse_v2', 'circle_cw']
     agents = ["dreamer", "d4pg", "mpo", "ppo", "sac", "ftg"]
     parser = argparse.ArgumentParser()
     parser.add_argument('--agent', type=str, choices=agents, required=True)
     parser.add_argument('--obs_type', type=str, choices=["lidar", "lidar_occupancy"], required=True)
-    parser.add_argument('--action_dist', type=str, choices=["tanh_normal"], required=False, default="tanh_normal")
+    parser.add_argument('--action_dist', type=str, choices=["tanh_normal", "normalized_tanhtransformed_normal"], required=False, default="tanh_normal")
     parser.add_argument('--checkpoint_dir', type=pathlib.Path, required=False)
     parser.add_argument('--trained_on', type=str, required=False, choices=tracks, default="")
     parser.add_argument('--tracks', nargs='+', type=str, default=tracks)

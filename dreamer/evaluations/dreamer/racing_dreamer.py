@@ -1,13 +1,15 @@
 import pathlib
 import shutil
 
-import dreamer.callbacks as callbacks
-from dreamer.evaluations.make_env import make_single_track_env
-from dreamer.evaluations.racing_agent import Agent
-from dreamer.dream import define_config, Dreamer
-import dreamer.tools as tools
-import dreamer.wrappers as wrappers
+import callbacks as callbacks
+from dream import define_config
+from evaluations.make_env import make_single_track_env
+from evaluations.racing_agent import Agent
+import tools as tools
+import wrappers as wrappers
 import tensorflow as tf
+
+from models import Dreamer
 
 
 def init_config(obs_type, action_dist):
@@ -44,7 +46,7 @@ class RacingDreamer(Dreamer, Agent):
         # initialize model
         actspace, obspace = env.action_space, env.observation_space
         super().__init__(config, datadir, actspace, obspace, writer=None)
-        shutil.rmtree(datadir)  # remove tmp directory
+#        shutil.rmtree(datadir)  # remove tmp directory
         self.load(checkpoint_path)
         print(f"[Info] Agent Variables: {len(self.variables)}")
 
