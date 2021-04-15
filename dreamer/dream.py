@@ -76,6 +76,9 @@ def define_config():
     config.pcont_scale = 10.0
     config.weight_decay = 0.0
     config.weight_decay_pattern = r'.*'
+    # CAPS: Conditioning for Action Policy Smoothness
+    config.lambda_temporal = 0.0    # must be >= 0 (it is a penalty in minimization)
+    config.lambda_spatial = 0.0     # must be >= 0
     # Training.
     config.batch_size = 50
     config.batch_length = 50
