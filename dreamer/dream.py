@@ -157,7 +157,7 @@ def create_log_dirs(config):
     # create filename
     prefix = f"{config.track}_dreamer_{config.task}"
     model_archs = f"{config.obs_type.replace('_', '')}_{config.action_dist.replace('_', '')}"
-    params = f"Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}"
+    params = f"Ar{config.action_repeat}_Bl{config.batch_length}_H{config.horizon}_CAPS_t{config.lambda_temporal}_s{config.lambda_spatial}"
     suffix = f"{config.seed}_{time.time()}"
     # create log dirs
     logdir = pathlib.Path(f'{config.logdir}/{prefix}_{model_archs}_{params}_{suffix}')
