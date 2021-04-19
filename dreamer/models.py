@@ -111,7 +111,7 @@ class Dreamer(tools.Module):
             model_loss /= float(self._strategy.num_replicas_in_sync)
 
         with tf.GradientTape() as actor_tape:
-            imag_feat, caps_infos = self._extend_imagine_ahead(post)
+            imag_feat, caps_infos = self._extend_imagine_ahead(post, actor_tape)
             reward = tf.cast(self._reward(imag_feat).mode(), 'float')  # cast: to address the output of bernoulli
             if self._c.pcont:
                 pcont = self._pcont(imag_feat).mean()
@@ -229,7 +229,8 @@ class Dreamer(tools.Module):
         imag_feat = self._dynamics.get_feat(states)
         return imag_feat
 
-    def img_transition(self, infos):
+    @tf.function
+    def img_transition(self, infos, tape):
         epsilon = 0.1
         state = infos['state']      # infos: dict with keys state, action, next_state, action_bar
         state_feat = tf.stop_gradient(self._dynamics.get_feat(state))  # compute actor's input (latent features)
@@ -238,13 +239,14 @@ class Dreamer(tools.Module):
         next_state = self._dynamics.img_step(state, action)
         # CAPS Note: We need to compute `action_bar` to estimate the spatial smoothness
         # action_bar := policy(state + small perturbation)
-        state_bar_feat = tf.random.normal(tf.shape(state_feat), state_feat, epsilon)    # state_bar = state + perturbation
-        action_bar = tf.stop_gradient(self._actor(state_bar_feat, training=False).sample())     # perturbed states do not affect actor's normalization?
+        with tape.stop_recording():
+            state_bar_feat = tf.random.normal(tf.shape(state_feat), state_feat, epsilon)    # state_bar = state + perturbation
+            action_bar = self._actor(state_bar_feat, training=False).sample()     # perturbed states do not affect actor's normalization?
         # Return all the infos as dict
         infos = {'state': state, 'action': action, 'next_state': next_state, 'action_bar': action_bar}
         return infos
 
-    def _extend_imagine_ahead(self, post):
+    def _extend_imagine_ahead(self, post, tape):
         if self._c.pcont:  # Last step could be terminal.
             post = {k: v[:, :-1] for k, v in post.items()}
         flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
@@ -256,7 +258,7 @@ class Dreamer(tools.Module):
                  'action_bar': tf.zeros((batch_size, self._actdim))}
         # Get all info for action regularization
         infos = tools.static_scan(
-            lambda prev, _: self.img_transition(prev),
+            lambda prev, _: self.img_transition(prev, tape),
             tf.range(self._c.horizon), start)
         # infos is a dict with keys: state, action, next_state, action_bar
         imag_feat = self._dynamics.get_feat(infos['next_state'])
