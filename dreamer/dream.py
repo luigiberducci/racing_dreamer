@@ -37,7 +37,7 @@ def define_config():
     """
     config = tools.AttrDict()
     # General.
-    config.datetime = datetime.now().strftime("%m-%d-%Y %H:%M:%S")      # just for logging config
+    config.datetime = datetime.now().strftime("%m-%d-%Y %H:%M:%S")  # just for logging config
     config.seed = random.randint(2, 10 ** 6)
     config.logdir = pathlib.Path('dreamer/logs/experiments')
     config.steps = 5e6
@@ -77,8 +77,8 @@ def define_config():
     config.weight_decay = 0.0
     config.weight_decay_pattern = r'.*'
     # CAPS: Conditioning for Action Policy Smoothness
-    config.lambda_temporal = 0.0    # must be >= 0 (it is a penalty in minimization)
-    config.lambda_spatial = 0.0     # must be >= 0
+    config.lambda_temporal = 0.0  # must be >= 0 (it is a penalty in minimization)
+    config.lambda_spatial = 0.0  # must be >= 0
     # Training.
     config.batch_size = 50
     config.batch_length = 50
@@ -161,9 +161,9 @@ def create_log_dirs(config):
     suffix = f"{config.seed}_{time.time()}"
     # create log dirs
     logdir = pathlib.Path(f'{config.logdir}/{prefix}_{model_archs}_{params}_{suffix}')
-    datadir = logdir / 'episodes'                   # where storing the episodes as np files
-    checkpoint_dir = logdir / 'checkpoints'         # where storing model checkpoints
-    best_checkpoint_dir = checkpoint_dir / 'best'   # where storing the best model checkpoint
+    datadir = logdir / 'episodes'  # where storing the episodes as np files
+    checkpoint_dir = logdir / 'checkpoints'  # where storing model checkpoints
+    best_checkpoint_dir = checkpoint_dir / 'best'  # where storing the best model checkpoint
     best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     # save configuration
     with open(logdir / 'config.yaml', 'w') as file:
@@ -185,12 +185,13 @@ def setup_experiments(config):
     np.random.seed(config.seed)
     tf.random.set_seed(config.seed)
 
+
 def main(config):
     # Setup logging
     setup_experiments(config)
     config.steps = int(config.steps)
     config.logdir, datadir, cp_dir = create_log_dirs(config)
-    #set_logging(config)
+    # set_logging(config)
     writer = tf.summary.create_file_writer(str(config.logdir), max_queue=1000, flush_millis=20000)
     writer.set_as_default()
     print(f"[Info] Logdir {config.logdir}")
@@ -239,7 +240,7 @@ def main(config):
     # Train and Evaluate the agent over the simulation process
     print(f'[Info] Simulating agent for {config.steps - step} steps.')
     simulation_state = None
-    best_test_return = 0.0      # for storing the best model so far
+    best_test_return = 0.0  # for storing the best model so far
     while step < config.steps:
         # Evaluation phase
         print('[Info] Start evaluation.')
@@ -260,9 +261,9 @@ def main(config):
         agent.save(cp_dir / f'{step}.pkl')
         # Training phase
         print('[Info] Start collection.')
-        steps = config.eval_every // config.action_repeat       # compute the n steps until next evaluation
-        train_agent = functools.partial(agent, training=True)   # for multi-agent: only 1 agent is training
-        eval_agent = functools.partial(agent, training=False)   # the other ones are fixed in evaluation mode
+        steps = config.eval_every // config.action_repeat  # compute the n steps until next evaluation
+        train_agent = functools.partial(agent, training=True)  # for multi-agent: only 1 agent is training
+        eval_agent = functools.partial(agent, training=False)  # the other ones are fixed in evaluation mode
         training_agents = [train_agent] + [eval_agent for _ in range(train_env.n_agents - 1)]
         simulation_state, _ = tools.simulate(training_agents, train_env, config, datadir, writer, prefix='train',
                                              steps=steps, sim_state=simulation_state, agents_ids=agent_ids)

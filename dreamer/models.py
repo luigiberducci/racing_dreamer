@@ -116,24 +116,32 @@ class Dreamer(tools.Module):
                 post = {k: v[:, :-1] for k, v in post.items()}
             flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
             start = {k: flatten(v) for k, v in post.items()}
-            policy = lambda state: self._actor(
-                tf.stop_gradient(self._dynamics.get_feat(state)), training=True).sample()
+            # Create lambda functions for action and action+noise
+            policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)), training=True).sample()
+            policy_bar = lambda state: self._actor(tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
+                                                                                     self._dynamics.get_feat(state),
+                                                                                     0.1)), training=False).sample()
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
             actions, actions_bar = [], []
             last = start
-            for _ in tf.range(self._c.horizon):
-                action = policy(last)
+            for hstep in range(self._c.horizon):
+                # Compute action
+                action = policy(last)           # action := policy(last)
+                action_bar = policy_bar(last)   # action := policy(last + small perturbation)
+                # Predict a step
                 last = self._dynamics.img_step(last, action)
+                # Append states, actions
                 [s.append(l) for s, l in zip(states, tf.nest.flatten(last))]
                 actions.append(action)
-                # compute perturbed state/action
-                last_bar = last + 0.1 * tf.random.normal(0, 1)
-                action_bar = policy(last_bar)
                 actions_bar.append(action_bar)
+            # Convert to proper format
+            actions = tf.stack(actions, 0)
+            actions_bar = tf.stack(actions_bar, 0)
+            states = [tf.stack(x, 0) for x in states]
             states = tf.nest.pack_sequence_as(start, states)
-            imag_feat = self._dynamics.get_feat(states)
             # End Imagination Phase
+            imag_feat = self._dynamics.get_feat(states)
             reward = tf.cast(self._reward(imag_feat).mode(), 'float')  # cast: to address the output of bernoulli
             if self._c.pcont:
                 pcont = self._pcont(imag_feat).mean()
@@ -148,9 +156,8 @@ class Dreamer(tools.Module):
             # Compute the loss
             actor_loss = -tf.reduce_mean(discount * returns)
             # Here: add action regularization for smooth control (https://arxiv.org/abs/2012.06644)
-            actions, next_actions = actions[:-1], actions[1:]
-            actor_loss += self._c.lambda_temporal * tf.nn.l2_loss(next_actions - actions)
-            actor_loss += self._c.lambda_spatial * tf.nn.l2_loss(actions_bar - actions)
+            actor_loss += self._c.lambda_temporal * tf.nn.l2_loss(actions[1:] - actions[:-1])
+            actor_loss += self._c.lambda_spatial * tf.nn.l2_loss(actions_bar[:-1] - actions[:-1])
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
         with tf.GradientTape() as value_tape:
