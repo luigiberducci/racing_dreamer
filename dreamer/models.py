@@ -120,7 +120,7 @@ class Dreamer(tools.Module):
             policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)), training=True).sample()
             policy_bar = lambda state: self._actor(tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
                                                                                      self._dynamics.get_feat(state),
-                                                                                     0.1)), training=False).sample()
+                                                                                     stddev=0.001)), training=False).sample()
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
             actions, actions_bar = [], []
