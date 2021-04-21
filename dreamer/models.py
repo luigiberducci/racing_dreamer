@@ -121,7 +121,7 @@ class Dreamer(tools.Module):
             policy_bar = lambda state: self._actor(
                 tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
                                                   self._dynamics.get_feat(state),
-                                                  stddev=0.001)), training=False).sample()
+                                                  stddev=0.01)), training=False).sample()
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
             actions, actions_bar = [], []
@@ -158,9 +158,9 @@ class Dreamer(tools.Module):
             actor_loss = -tf.reduce_mean(discount * returns)
             # Here: add action regularization for smooth control (https://arxiv.org/abs/2012.06644)
             actor_loss += self._c.lambda_temporal * tf.reduce_mean(
-                tf.sqrt(tf.reduce_sum(tf.pow(actions[1:] - actions[:-1], 2), axis=[0, 2])))
+                tf.reduce_sum(tf.sqrt(tf.reduce_sum(tf.pow(actions[1:]-actions[:-1], 2), -1)), 0))
             actor_loss += self._c.lambda_spatial * tf.reduce_mean(
-                tf.sqrt(tf.reduce_sum(tf.pow(actions_bar[:-1] - actions[:-1], 2), axis=[0, 2])))
+                tf.reduce_sum(tf.sqrt(tf.reduce_sum(tf.pow(actions_bar[:-1] - actions[:-1], 2), -1)), 0))
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
         with tf.GradientTape() as value_tape:
