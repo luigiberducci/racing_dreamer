@@ -118,17 +118,18 @@ class Dreamer(tools.Module):
             start = {k: flatten(v) for k, v in post.items()}
             # Create lambda functions for action and action+noise
             policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)), training=True).sample()
-            policy_bar = lambda state: self._actor(tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
-                                                                                     self._dynamics.get_feat(state),
-                                                                                     stddev=0.001)), training=False).sample()
+            policy_bar = lambda state: self._actor(
+                tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
+                                                  self._dynamics.get_feat(state),
+                                                  stddev=0.001)), training=False).sample()
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
             actions, actions_bar = [], []
             last = start
             for hstep in range(self._c.horizon):
                 # Compute action
-                action = policy(last)           # action := policy(last)
-                action_bar = policy_bar(last)   # action := policy(last + small perturbation)
+                action = policy(last)  # action := policy(last)
+                action_bar = policy_bar(last)  # action := policy(last + small perturbation)
                 # Predict a step
                 last = self._dynamics.img_step(last, action)
                 # Append states, actions
@@ -156,8 +157,10 @@ class Dreamer(tools.Module):
             # Compute the loss
             actor_loss = -tf.reduce_mean(discount * returns)
             # Here: add action regularization for smooth control (https://arxiv.org/abs/2012.06644)
-            actor_loss += self._c.lambda_temporal * tf.nn.l2_loss(actions[1:] - actions[:-1])
-            actor_loss += self._c.lambda_spatial * tf.nn.l2_loss(actions_bar[:-1] - actions[:-1])
+            actor_loss += self._c.lambda_temporal * tf.reduce_mean(
+                tf.sqrt(tf.reduce_sum(tf.pow(actions[1:] - actions[:-1], 2), axis=[0, 2])))
+            actor_loss += self._c.lambda_spatial * tf.reduce_mean(
+                tf.sqrt(tf.reduce_sum(tf.pow(actions_bar[:-1] - actions[:-1], 2), axis=[0, 2])))
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
         with tf.GradientTape() as value_tape:
