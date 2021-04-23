@@ -122,6 +122,8 @@ class Dreamer(tools.Module):
                 tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
                                                   self._dynamics.get_feat(state),
                                                   stddev=0.01)), training=False).sample()
+            # TODO: implement with kl divergence, access to policy dist in proper format by accessing the _dist of SampleDist
+            # TODO: Question, why does Dreamer need SampleDist at all?
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
             actions, actions_bar = [], []
