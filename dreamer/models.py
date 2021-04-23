@@ -131,14 +131,12 @@ class Dreamer(tools.Module):
                 action_dist = policy(last)  # action_dist := policy(last)
                 action_bar_dist = policy_bar(last)  # action_dist := policy(last + small perturbation)
                 # Predict a step
-                last = self._dynamics.img_step(last, action_dist)
+                last = self._dynamics.img_step(last, action_dist.sample())
                 # Append states, actions
                 [s.append(l) for s, l in zip(states, tf.nest.flatten(last))]
-                actions.append(action_dist.get_dist())
-                actions_bar.append(action_bar_dist.get_dist())
+                actions.append(action_dist)
+                actions_bar.append(action_bar_dist)
             # Convert to proper format
-            actions = tf.stack(actions, 0)
-            actions_bar = tf.stack(actions_bar, 0)
             states = [tf.stack(x, 0) for x in states]
             states = tf.nest.pack_sequence_as(start, states)
             # End Imagination Phase
@@ -157,8 +155,12 @@ class Dreamer(tools.Module):
             # Compute the loss
             actor_loss = -tf.reduce_mean(discount * returns)
             # Here: add action regularization for smooth control (https://arxiv.org/abs/2012.06644)
-            actor_loss += self._c.lambda_temporal * tf.reduce_mean(tfd.kl_divergence(actions[1:], actions[:-1]))
-            actor_loss += self._c.lambda_spatial * tf.reduce_mean(tfd.kl_divergence(actions[:-1], actions_bar[:-1]))
+            temporal_kl_divergence, spatial_kl_divergence = 0.0, 0.0
+            for next_action_dist, action_dist, action_bar_dist in zip(actions[1:], actions[:-1], actions_bar[:-1]):
+                temporal_kl_divergence += action_dist.kl_divergence(next_action_dist)
+                spatial_kl_divergence += action_dist.kl_divergence(action_bar_dist)
+            actor_loss += self._c.lambda_temporal * temporal_kl_divergence / (len(actions)-1)
+            actor_loss += self._c.lambda_spatial * spatial_kl_divergence / (len(actions)-1)
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
         with tf.GradientTape() as value_tape:

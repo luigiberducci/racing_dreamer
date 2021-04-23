@@ -311,6 +311,9 @@ class SampleDist:
     def __getattr__(self, name):
         return getattr(self._dist, name)
 
+    def get_dist(self):
+        return self._dist
+
     def mean(self):
         samples = self._dist.sample(self._samples)
         return tf.reduce_mean(samples, 0)
@@ -324,6 +327,12 @@ class SampleDist:
         sample = self._dist.sample(self._samples)
         logprob = self.log_prob(sample)
         return -tf.reduce_mean(logprob, 0)
+
+    def kl_divergence(self, dist_b):
+        # KL div: int_{x~p} p(x) * log(p(x) / q(x))
+        # Estimate KL from sampling: sum_{x} 1/n * log(p(x) / q(x)) = mean(log(p(x) / q(x))
+        sample = self._dist.sample(self._samples)
+        return tf.reduce_mean(tf.math.log(self.prob(sample) / dist_b.prob(sample)))
 
 
 class OneHotDist:
