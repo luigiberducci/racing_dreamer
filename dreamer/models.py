@@ -117,27 +117,25 @@ class Dreamer(tools.Module):
             flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
             start = {k: flatten(v) for k, v in post.items()}
             # Create lambda functions for action and action+noise
-            policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)), training=True).sample()
+            policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)), training=True)
             policy_bar = lambda state: self._actor(
                 tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
                                                   self._dynamics.get_feat(state),
-                                                  stddev=0.01)), training=False).sample()
-            # TODO: implement with kl divergence, access to policy dist in proper format by accessing the _dist of SampleDist
-            # TODO: Question, why does Dreamer need SampleDist at all?
+                                                  stddev=0.01)), training=False)
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
             actions, actions_bar = [], []
             last = start
             for hstep in range(self._c.horizon):
                 # Compute action
-                action = policy(last)  # action := policy(last)
-                action_bar = policy_bar(last)  # action := policy(last + small perturbation)
+                action_dist = policy(last)  # action_dist := policy(last)
+                action_bar_dist = policy_bar(last)  # action_dist := policy(last + small perturbation)
                 # Predict a step
-                last = self._dynamics.img_step(last, action)
+                last = self._dynamics.img_step(last, action_dist)
                 # Append states, actions
                 [s.append(l) for s, l in zip(states, tf.nest.flatten(last))]
-                actions.append(action)
-                actions_bar.append(action_bar)
+                actions.append(action_dist.get_dist())
+                actions_bar.append(action_bar_dist.get_dist())
             # Convert to proper format
             actions = tf.stack(actions, 0)
             actions_bar = tf.stack(actions_bar, 0)
@@ -159,10 +157,8 @@ class Dreamer(tools.Module):
             # Compute the loss
             actor_loss = -tf.reduce_mean(discount * returns)
             # Here: add action regularization for smooth control (https://arxiv.org/abs/2012.06644)
-            actor_loss += self._c.lambda_temporal * tf.reduce_mean(
-                tf.reduce_sum(tf.sqrt(tf.reduce_sum(tf.pow(actions[1:]-actions[:-1], 2), -1)), 0))
-            actor_loss += self._c.lambda_spatial * tf.reduce_mean(
-                tf.reduce_sum(tf.sqrt(tf.reduce_sum(tf.pow(actions_bar[:-1] - actions[:-1], 2), -1)), 0))
+            actor_loss += self._c.lambda_temporal * tf.reduce_mean(tfd.kl_divergence(actions[1:], actions[:-1]))
+            actor_loss += self._c.lambda_spatial * tf.reduce_mean(tfd.kl_divergence(actions[:-1], actions_bar[:-1]))
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
         with tf.GradientTape() as value_tape:
@@ -650,3 +646,6 @@ class ActionDecoder(tools.Module):
         else:
             raise NotImplementedError(self._dist)
         return dist
+
+    def get_dist(self):
+        return self._dist
