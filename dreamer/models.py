@@ -117,25 +117,37 @@ class Dreamer(tools.Module):
             flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
             start = {k: flatten(v) for k, v in post.items()}
             # Create lambda functions for action and action+noise
-            policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)), training=True)
-            policy_bar = lambda state: self._actor(
-                tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
-                                                  self._dynamics.get_feat(state),
-                                                  stddev=0.01)), training=False)
+            if self._c.caps_loss == 'kl':
+                policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)), training=True)
+                policy_bar = lambda state: self._actor(
+                    tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
+                                                      self._dynamics.get_feat(state),
+                                                      stddev=0.01)), training=False)
+                imagine_step = lambda prev, dist: self._dynamics.img_step(prev, dist.sample())
+            elif self._c.caps_loss == "l2":
+                policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)),
+                                                   training=True).sample()
+                policy_bar = lambda state: self._actor(
+                    tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
+                                                      self._dynamics.get_feat(state),
+                                                      stddev=0.01)), training=False).sample()
+                imagine_step = lambda prev, act: self._dynamics.img_step(prev, act)
+            else:
+                raise NotImplementedError(f"caps loss {self._c.caps_loss} not implemented")
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
             actions, actions_bar = [], []
             last = start
             for hstep in range(self._c.horizon):
                 # Compute action
-                action_dist = policy(last)  # action_dist := policy(last)
-                action_bar_dist = policy_bar(last)  # action_dist := policy(last + small perturbation)
+                action = policy(last)  # action_dist := policy(last)
+                action_bar = policy_bar(last)  # action_dist := policy(last + small perturbation)
                 # Predict a step
-                last = self._dynamics.img_step(last, action_dist.sample())
+                last = imagine_step(last, action)
                 # Append states, actions
                 [s.append(l) for s, l in zip(states, tf.nest.flatten(last))]
-                actions.append(action_dist)
-                actions_bar.append(action_bar_dist)
+                actions.append(action)
+                actions_bar.append(action_bar)
             # Convert to proper format
             states = [tf.stack(x, 0) for x in states]
             states = tf.nest.pack_sequence_as(start, states)
@@ -155,12 +167,22 @@ class Dreamer(tools.Module):
             # Compute the loss
             actor_loss = -tf.reduce_mean(discount * returns)
             # Here: add action regularization for smooth control (https://arxiv.org/abs/2012.06644)
-            temporal_kl_divergence, spatial_kl_divergence = 0.0, 0.0
-            for next_action_dist, action_dist, action_bar_dist in zip(actions[1:], actions[:-1], actions_bar[:-1]):
-                temporal_kl_divergence += action_dist.kl_divergence(next_action_dist)
-                spatial_kl_divergence += action_dist.kl_divergence(action_bar_dist)
-            actor_loss += self._c.lambda_temporal * temporal_kl_divergence / (len(actions)-1)
-            actor_loss += self._c.lambda_spatial * spatial_kl_divergence / (len(actions)-1)
+            if self._c.caps_loss == "kl":
+                temporal_kl_divergence, spatial_kl_divergence = 0.0, 0.0
+                for next_action_dist, action_dist, action_bar_dist in zip(actions[1:], actions[:-1], actions_bar[:-1]):
+                    temporal_kl_divergence += action_dist.kl(next_action_dist)
+                    spatial_kl_divergence += action_dist.kl(action_bar_dist)
+                actor_loss += self._c.lambda_temporal * temporal_kl_divergence / (len(actions) - 1)
+                actor_loss += self._c.lambda_spatial * spatial_kl_divergence / (len(actions) - 1)
+            elif self._c.caps_loss == "l2":
+                actions = tf.stack(actions, 0)  # Convert proper format
+                actions_bar = tf.stack(actions_bar, 0)
+                actor_loss += self._c.lambda_temporal * tf.reduce_mean(
+                    tf.reduce_sum(tf.sqrt(tf.reduce_sum(tf.pow(actions[1:] - actions[:-1], 2), -1)), 0))
+                actor_loss += self._c.lambda_spatial * tf.reduce_mean(
+                    tf.reduce_sum(tf.sqrt(tf.reduce_sum(tf.pow(actions_bar[:-1] - actions[:-1], 2), -1)), 0))
+            else:
+                raise NotImplementedError(f"caps loss {self._c.caps_loss} not implemented")
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
         with tf.GradientTape() as value_tape:

@@ -328,11 +328,10 @@ class SampleDist:
         logprob = self.log_prob(sample)
         return -tf.reduce_mean(logprob, 0)
 
-    def kl_divergence(self, dist_b):
-        # KL div: int_{x~p} p(x) * log(p(x) / q(x))
-        # Estimate KL from sampling: sum_{x} 1/n * log(p(x) / q(x)) = mean(log(p(x) / q(x))
-        sample = self._dist.sample(self._samples)
-        return tf.reduce_mean(tf.math.log(self.prob(sample) / dist_b.prob(sample)))
+    def kl(self, q):
+        # self (i.e., p) and q are distributions, not tensors!
+        xs = self.sample(1000)
+        return tf.reduce_mean(self.log_prob(xs) - q.log_prob(xs))  # note: log p(x) - log q(x) = log (p(x) / q(x))
 
 
 class OneHotDist:

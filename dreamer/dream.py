@@ -77,6 +77,7 @@ def define_config():
     config.weight_decay = 0.0
     config.weight_decay_pattern = r'.*'
     # CAPS: Conditioning for Action Policy Smoothness
+    config.caps_loss = "l2"     # loss for temporal and spatial regularization, either 'l2' or 'kl'
     config.lambda_temporal = 0.0  # must be >= 0 (it is a penalty in minimization)
     config.lambda_spatial = 0.0  # must be >= 0
     # Training.
