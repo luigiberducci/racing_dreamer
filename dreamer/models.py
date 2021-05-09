@@ -70,12 +70,12 @@ class Dreamer(tools.Module):
         else:
             latent, action = state
         embed = self._encode(tools.preprocess(obs, self._c))
-        latent, _ = self._dynamics.obs_step(latent, action, embed)
+        latent, _ = self._dynamics.obs_step(latent, action, embed, log=not training)
         feat = self._dynamics.get_feat(latent)
         if training:
             action = self._actor(feat).sample()
         else:
-            action = self._actor(feat).mode()
+            action = self._actor(feat, log=True).mode()
         action = self._exploration(action, training)
         state = (latent, action)
         return action, state
@@ -440,38 +440,63 @@ class RSSM(tools.Module):
         prior = {k: tf.transpose(v, [1, 0, 2]) for k, v in prior.items()}
         return prior
 
-    @staticmethod
-    def get_feat(state):
-        return tf.concat([state['stoch'], state['deter']], -1)
+    def get_feat(self, state, log=False):
+        feat = tf.concat([state['stoch'], state['deter']], -1)
+        if log:
+            self.log_activity('output_feat', feat)
+        return feat
 
     @staticmethod
     def get_dist(state):
         return tfd.MultivariateNormalDiag(state['mean'], state['std'])
 
     @tf.function
-    def obs_step(self, prev_state, prev_action, embed):
-        prior = self.img_step(prev_state, prev_action)
+    def obs_step(self, prev_state, prev_action, embed, log=False):
+        if log:
+            self.log_activity('input', [prev_state, prev_action, embed])
+        prior = self.img_step(prev_state, prev_action, log=log)
         x = tf.concat([prior['deter'], embed], -1)
+        if log:
+            self.log_activity('conc_deter_embed', x)
         x = self.get('obs1', tfkl.Dense, self._hidden_size, self._activation)(x)
+        if log:
+            self.log_activity('obs1', x)
         x = self.get('obs2', tfkl.Dense, 2 * self._stoch_size, None)(x)
+        if log:
+            self.log_activity('obs2', x)
         mean, std = tf.split(x, 2, -1)
         std = tf.nn.softplus(std) + 0.1
         stoch = self.get_dist({'mean': mean, 'std': std}).sample()
         post = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': prior['deter']}
+        if log:
+            self.log_activity('out_post', post)
         return post, prior
 
     @tf.function
-    def img_step(self, prev_state, prev_action):
+    def img_step(self, prev_state, prev_action, log=False):
         x = tf.concat([prev_state['stoch'], prev_action], -1)
+        if log:
+            self.log_activity('img_step_in', x)
         x = self.get('img1', tfkl.Dense, self._hidden_size, self._activation)(x)
+        if log:
+            self.log_activity('img1', x)
         x, deter = self._cell(x, [prev_state['deter']])
+        if log:
+            self.log_activity('cell_y', x)
+            self.log_activity('cell_state', deter)
         deter = deter[0]  # Keras wraps the state in a list.
         x = self.get('img2', tfkl.Dense, self._hidden_size, self._activation)(x)
+        if log:
+            self.log_activity('img2', x)
         x = self.get('img3', tfkl.Dense, 2 * self._stoch_size, None)(x)
+        if log:
+            self.log_activity('img3', x)
         mean, std = tf.split(x, 2, -1)
         std = tf.nn.softplus(std) + 0.1
         stoch = self.get_dist({'mean': mean, 'std': std}).sample()
         prior = {'mean': mean, 'std': std, 'stoch': stoch, 'deter': deter}
+        if log:
+            self.log_activity('prior', prior)
         return prior
 
 
@@ -524,15 +549,25 @@ class LidarDistanceDecoder(tools.Module):
         self._shape = shape
         self._depth = depth
 
-    def __call__(self, features):
+    def __call__(self, features, log=False):
         # note: features = tf.concat([state['stoch'], state['deter']], -1)])
         x = tf.reshape(features, shape=(-1, *features.shape[2:]))
+        if log:
+            self.log_activity('input', x)
         x = self.get('dense1', tfkl.Dense, units=2 * self._depth, activation=None)(x)
+        if log:
+            self.log_activity('dense1', x)
         x = self.get('dense2', tfkl.Dense, units=4 * self._depth, activation=self._act)(x)
+        if log:
+            self.log_activity('dense2', x)
         params = tfpl.IndependentNormal.params_size(self._shape[0])
         x = self.get('params', tfkl.Dense, units=params, activation=tf.nn.leaky_relu)(x)
+        if log:
+            self.log_activity('params', x)
         x = self.get('dist', tfpl.IndependentNormal, event_shape=self._shape[0])(x)
         dist = tfd.BatchReshape(x, batch_shape=features.shape[:2])
+        if log:
+            self.log_activity('output', dist.mean())
         return dist
 
 
@@ -546,17 +581,34 @@ class LidarOccupancyDecoder(tools.Module):
         self._depth = depth
         self._shape = shape
 
-    def __call__(self, features):
+    def __call__(self, features, log=False):
         kwargs = dict(strides=2, activation=self._act)
+        if log:
+            self.log_activity('input', features)
         x = self.get('h1', tfkl.Dense, 8 * self._depth, None)(features)
+        if log:
+            self.log_activity('h1', x)
         x = tf.reshape(x, [-1, 1, 1, 8 * self._depth])
+        if log:
+            self.log_activity('h1_reshape', x)
         x = self.get('h2', tfkl.Conv2DTranspose, 4 * self._depth, 5, **kwargs)(x)
+        if log:
+            self.log_activity('h2', x)
         x = self.get('h3', tfkl.Conv2DTranspose, 2 * self._depth, 5, **kwargs)(x)
+        if log:
+            self.log_activity('h3', x)
         x = self.get('h4', tfkl.Conv2DTranspose, 1 * self._depth, 6, **kwargs)(x)
+        if log:
+            self.log_activity('h4', x)
         x = self.get('h5', tfkl.Conv2DTranspose, 1, 6, **kwargs)(x)
+        if log:
+            self.log_activity('h5', x)
         shape = tf.concat([tf.shape(features)[:-1], self._shape], axis=0)
         x = tf.reshape(x, shape)
-        return tfd.Independent(tfd.Bernoulli(x), 3)  # last 3 dimensions (row, col, chan) define 1 pixel
+        dist = tfd.Independent(tfd.Bernoulli(x), 3)  # last 3 dimensions (row, col, chan) define 1 pixel
+        if log:
+            self.log_activity('output', dist.mean())
+        return dist
 
 
 class ConvEncoder(tools.Module):
@@ -612,17 +664,27 @@ class DenseDecoder(tools.Module):
         self._dist = dist
         self._act = act
 
-    def __call__(self, features):
+    def __call__(self, features, log=False):
         x = features
+        if log:
+            self.log_activity('input', x)
         for index in range(self._layers):
             x = self.get(f'h{index}', tfkl.Dense, self._units, self._act)(x)
+            if log:
+                self.log_activity(f'h{index}', x)
         x = self.get(f'hout', tfkl.Dense, np.prod(self._shape))(x)
+        if log:
+            self.log_activity('hout', x)
         x = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
         if self._dist == 'normal':
-            return tfd.Independent(tfd.Normal(x, 1), len(self._shape))
+            dist = tfd.Independent(tfd.Normal(x, 1), len(self._shape))
         elif self._dist == 'binary':
-            return tfd.Independent(tfd.Bernoulli(x), len(self._shape))
-        raise NotImplementedError(self._dist)
+            dist = tfd.Independent(tfd.Bernoulli(x), len(self._shape))
+        else:
+            raise NotImplementedError(self._dist)
+        if log:
+            self.log_activity('output', dist.mean())
+        return dist
 
 
 class ActionDecoder(tools.Module):
@@ -639,14 +701,20 @@ class ActionDecoder(tools.Module):
         self._init_std = init_std
         self._mean_scale = mean_scale
 
-    def __call__(self, features, training=False):
+    def __call__(self, features, training=False, log=False):
         raw_init_std = np.log(np.exp(self._init_std) - 1)
         x = features
+        if log:
+            self.log_activity('input', x)
         for index in range(self._layers):
             x = self.get(f'h{index}', tfkl.Dense, self._units, self._act)(x)
+            if log:
+                self.log_activity(f'h{index}', x)
         if self._dist == 'tanh_normal':  # Original from Dreamer
             # https://www.desmos.com/calculator/rcmcf5jwe7
             x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
+            if log:
+                self.log_activity(f'hout', x)
             mean, std = tf.split(x, 2, -1)
             mean = self._mean_scale * tf.tanh(mean / self._mean_scale)
             std = tf.nn.softplus(std + raw_init_std) + self._min_std
@@ -654,19 +722,27 @@ class ActionDecoder(tools.Module):
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
             dist = tools.SampleDist(dist)
+            if log:
+                self.log_activity(f'output', dist.mean())
         elif self._dist == 'normalized_tanhtransformed_normal':
             # Normalized variation of the original actor: (mu,std) normalized, then create tanh normal from them
             # The normalization params (moving avg, std) are updated only during training
             x = self.get(f'hout', tfkl.Dense, 2 * self._size)(x)
+            if log:
+                self.log_activity(f'hout', x)
             x = tf.reshape(x, [-1, 2 * self._size])
             x = self.get(f'hnorm', tfkl.BatchNormalization)(x, training=training)  # `training` true only in imagination
             x = tf.reshape(x, [*features.shape[:-1], -1])
+            if log:
+                self.log_activity(f'hnorm', x)
             mean, std = tf.split(x, 2, -1)
             std = tf.nn.softplus(std) + self._min_std  # to have positive values
             dist = tfd.Normal(mean, std)
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
             dist = tools.SampleDist(dist)
+            if log:
+                self.log_activity(f'output', dist.mean())
         else:
             raise NotImplementedError(self._dist)
         return dist

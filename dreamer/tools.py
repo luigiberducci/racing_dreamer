@@ -21,6 +21,9 @@ class AttrDict(dict):
 
 
 class Module(tf.Module):
+    def __init__(self):
+        self._list_of_passes = []  # list of forward passes
+        self._current_pass = {}  # dictionary of (layer_key: output_tensor) in the current pass
 
     def save(self, filename):
         values = tf.nest.map_structure(lambda x: x.numpy(), self.variables)
@@ -31,6 +34,22 @@ class Module(tf.Module):
         with pathlib.Path(filename).open('rb') as f:
             values = pickle.load(f)
         tf.nest.map_structure(lambda x, y: x.assign(y), self.variables, values)
+
+    def log_activity(self, key, value):
+        if 'input' in key:
+            self._current_pass.clear()
+            self._current_pass[key] = value
+        elif 'output' in key:
+            self._current_pass[key] = value
+            self._list_of_passes.append(self._current_pass.copy())
+        else:
+            self._current_pass[key] = value
+
+    def log_write(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self._list_of_passes, f)
+            print(f"[Info] Written {len(self._list_of_passes)} passes in {filename}")
+        self._list_of_passes.clear()
 
     def get(self, name, actor, *args, **kwargs):
         # Create or get layer by name to avoid mentioning it in the constructor.
