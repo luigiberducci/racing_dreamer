@@ -6,7 +6,13 @@ import scipy
 from matplotlib import colors, cm
 import math
 import scipy.stats as stats
+from scipy.special import erf
 
+def p(x, mu, s):
+    return (1.0 / np.sqrt(2 * np.pi * (s ** 2))) * np.exp(-1.0 / (2 * (s ** 2)) * ((x - mu) ** 2))
+
+def c(x, mu, s):
+    return 1 / 2 * (1 + erf((x - mu) / (s * np.sqrt(2))))
 
 def scan_to_xy(scan):
     # note: assume ranges have been normalized in +-0.5
@@ -52,7 +58,8 @@ values = np.array([np.squeeze(data['value'][k]['output']) for k in range(len(dat
 pconts = np.array([np.squeeze(data['pcont'][k]['output']) for k in range(len(data['pcont']))])
 
 # 3. visualize action model
-actions = np.array([np.squeeze(data['actor'][k]['output']) for k in range(len(data['actor']))])
+action_means = np.array([np.squeeze(data['actor'][k]['out_mean']) for k in range(len(data['actor']))])
+action_stds = np.array([np.squeeze(data['actor'][k]['out_std']) for k in range(len(data['actor']))])
 
 deter_min, deter_max = np.min(deters), np.max(deters)
 stoch_min, stoch_max = np.min(stochs), np.max(stochs)
@@ -67,7 +74,8 @@ for t in range(embeds.shape[0]):
     reward = rewards[t]
     value = values[t]
     pcont = pconts[t]
-    action = actions[t]
+    action_mean = action_means[t]
+    action_std = action_stds[t]
 
     plt.clf()
 
@@ -111,14 +119,19 @@ for t in range(embeds.shape[0]):
     plt.plot(x, stats.bernoulli.pmf(x, mu))
 
     plt.subplot(2, 4, 4)
-    plt.title("motor ~ mean(Tanh(Normal(m,s)))")
-    plt.axvline(action[0], ymin=0.0, ymax=1.0, marker='.')
+    plt.title("motor ~ Tanh(Normal(m,s))")
+    mu, std = action_mean[0], action_std[0]
+    x = np.linspace(-1, 1, 1000)
+    y = np.diff(c(np.arctanh(x), mu, std)) / (x[1]-x[0])
+    plt.plot(x, y)
     plt.xlim(-1.1, 1.1)
-    # plt.ylim(0.0, 1.2)
 
     plt.subplot(2, 4, 8)
-    plt.title("steer ~ mean(Tanh(Normal(m,s)))")
-    plt.axvline(action[1], ymin=0.0, ymax=1.0, marker='.')
+    plt.title("steer ~ Tanh(Normal(m,s))")
+    mu, std = action_mean[1], action_std[1]
+    x = np.linspace(-1, 1, 1000)
+    y = np.diff(c(np.arctanh(x), mu, std)) / (x[1] - x[0])
+    plt.plot(x, y)
     plt.xlim(-1.1, 1.1)
     # plt.ylim(0.0, 1.2)
 
