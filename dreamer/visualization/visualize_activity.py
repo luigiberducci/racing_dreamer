@@ -25,8 +25,8 @@ def scan_to_xy(scan):
     return x, y
 
 
-timestamp = "1620555767"
-evaldir = "eval_dreamer_austria_lidar_1620555640.9984643"
+timestamp = "1620640322"
+evaldir = "eval_dreamer_austria_lidar_1620640237.4295232"
 filenames = {
     'actor': f"logs/evaluations/{evaldir}/neural_activity/actor_0_{timestamp}.pkl",
     'decoder': f"logs/evaluations/{evaldir}/neural_activity/decoder_0_{timestamp}.pkl",
@@ -37,7 +37,7 @@ filenames = {
     'pcont': f"logs/evaluations/{evaldir}/neural_activity/pcont_0_{timestamp}.pkl"
 }
 
-tmpdir = pathlib.Path(".tmp")
+tmpdir = pathlib.Path(f".tmp/{timestamp}")
 tmpdir.mkdir(exist_ok=True)
 
 data = {}
@@ -63,11 +63,14 @@ action_stds = np.array([np.squeeze(data['actor'][k]['out_std']) for k in range(l
 
 deter_min, deter_max = np.min(deters), np.max(deters)
 stoch_min, stoch_max = np.min(stochs), np.max(stochs)
-print(f"{deter_min} {deter_max}")
-print(f"{stoch_min} {stoch_max}")
+print(f"[Info] Normalizing deter component in: {deter_min}, {deter_max}")
+print(f"[Info] Normalizing stoch component in: {stoch_min}, {stoch_max}")
+print()
 
 plt.figure(1, (20, 10))
 for t in range(embeds.shape[0]):
+    if t%10==0:
+        print(f"[Info] Processing t={t}")
     embed = embeds[t]
     deter = deters[t]
     stoch = stochs[t]
@@ -123,7 +126,7 @@ for t in range(embeds.shape[0]):
     mu, std = action_mean[0], action_std[0]
     x = np.linspace(-1, 1, 1000)
     y = np.diff(c(np.arctanh(x), mu, std)) / (x[1]-x[0])
-    plt.plot(x, y)
+    plt.plot(x[:-1], y)
     plt.xlim(-1.1, 1.1)
 
     plt.subplot(2, 4, 8)
@@ -131,7 +134,7 @@ for t in range(embeds.shape[0]):
     mu, std = action_mean[1], action_std[1]
     x = np.linspace(-1, 1, 1000)
     y = np.diff(c(np.arctanh(x), mu, std)) / (x[1] - x[0])
-    plt.plot(x, y)
+    plt.plot(x[:-1], y)
     plt.xlim(-1.1, 1.1)
     # plt.ylim(0.0, 1.2)
 
