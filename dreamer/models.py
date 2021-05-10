@@ -718,6 +718,9 @@ class ActionDecoder(tools.Module):
             mean, std = tf.split(x, 2, -1)
             mean = self._mean_scale * tf.tanh(mean / self._mean_scale)
             std = tf.nn.softplus(std + raw_init_std) + self._min_std
+            if log:
+                self.log_activity(f'out_mean', mean)
+                self.log_activity(f'out_std', std)
             dist = tfd.Normal(mean, std)
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
@@ -737,6 +740,9 @@ class ActionDecoder(tools.Module):
                 self.log_activity(f'hnorm', x)
             mean, std = tf.split(x, 2, -1)
             std = tf.nn.softplus(std) + self._min_std  # to have positive values
+            if log:
+                self.log_activity(f'out_mean', mean)
+                self.log_activity(f'out_std', std)
             dist = tfd.Normal(mean, std)
             dist = tfd.TransformedDistribution(dist, tools.TanhBijector())
             dist = tfd.Independent(dist, 1)
