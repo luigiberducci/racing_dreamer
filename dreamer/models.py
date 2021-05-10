@@ -164,10 +164,9 @@ class Dreamer(tools.Module):
             self._decode = LidarOccupancyDecoder()
         self._dynamics = RSSM(self._c.stoch_size, self._c.deter_size, self._c.deter_size)
 
-        self._reward = DenseDecoder((), 2, self._c.num_units, dist=self._c.reward_out_dist, act=act)
+        self._reward = DenseDecoder((), 2, self._c.num_units, dist=self._c.reward_out_dist, act=act, stddev=None)
         if self._c.pcont:
-            self._pcont = DenseDecoder(
-                (), 3, self._c.num_units, 'binary', act=act)
+            self._pcont = DenseDecoder((), 3, self._c.num_units, 'binary', act=act)
         self._value = DenseDecoder((), 3, self._c.num_units, act=act)
         self._actor = ActionDecoder(
             self._actdim, 4, self._c.num_units, self._c.action_dist,
@@ -300,7 +299,6 @@ class Dreamer(tools.Module):
         [tf.summary.scalar('agent/' + k, m) for k, m in metrics]
         print(f'[{step}]', ' / '.join(f'{k} {v:.1f}' for k, v in metrics))
         self._writer.flush()
-
 
 
 class RSSM(tools.Module):
@@ -508,7 +506,7 @@ class ConvDecoder(tools.Module):
 
 class DenseDecoder(tools.Module):
 
-    def __init__(self, shape, layers, units, dist='normal', act=tf.nn.elu):
+    def __init__(self, shape, layers, units, dist='normal', act=tf.nn.elu, stddev=1.0):
         super().__init__()
         self._name = "reward"
         self._shape = shape
@@ -516,16 +514,28 @@ class DenseDecoder(tools.Module):
         self._units = units
         self._dist = dist
         self._act = act
+        self._stddev = stddev
 
     def __call__(self, features):
         x = features
         for index in range(self._layers):
             x = self.get(f'h{index}', tfkl.Dense, self._units, self._act)(x)
-        x = self.get(f'hout', tfkl.Dense, np.prod(self._shape))(x)
-        x = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
         if self._dist == 'normal':
-            return tfd.Independent(tfd.Normal(x, 1), len(self._shape))
+            if self._stddev is None:
+                # if not specified a `stddev` then learn it
+                x = self.get(f'hout', tfkl.Dense, 2 * np.prod(self._shape))(x)
+                mean, std = tf.split(x, 2, -1)
+                mean = tf.reshape(mean, tf.concat([tf.shape(features)[:-1], self._shape], 0))
+                std = tf.reshape(std, tf.concat([tf.shape(features)[:-1], self._shape], 0))
+                return tfd.Independent(tfd.Normal(mean, std), len(self._shape))
+            else:
+                # use a fixed std dev
+                x = self.get(f'hout', tfkl.Dense, np.prod(self._shape))(x)
+                x = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
+                return tfd.Independent(tfd.Normal(x, self._stddev), len(self._shape))
         elif self._dist == 'binary':
+            x = self.get(f'hout', tfkl.Dense, np.prod(self._shape))(x)
+            x = tf.reshape(x, tf.concat([tf.shape(features)[:-1], self._shape], 0))
             return tfd.Independent(tfd.Bernoulli(x), len(self._shape))
         raise NotImplementedError(self._dist)
 
