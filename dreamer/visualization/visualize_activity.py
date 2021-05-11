@@ -25,8 +25,8 @@ def scan_to_xy(scan):
     return x, y
 
 
-timestamp = "1620640322"
-evaldir = "eval_dreamer_austria_lidar_1620640237.4295232"
+timestamp = "1620652151"
+evaldir = "eval_dreamer_austria_lidar_1620651969.042252"
 filenames = {
     'actor': f"logs/evaluations/{evaldir}/neural_activity/actor_0_{timestamp}.pkl",
     'decoder': f"logs/evaluations/{evaldir}/neural_activity/decoder_0_{timestamp}.pkl",
@@ -38,7 +38,7 @@ filenames = {
 }
 
 tmpdir = pathlib.Path(f".tmp/{timestamp}")
-tmpdir.mkdir(exist_ok=True)
+tmpdir.mkdir(exist_ok=True, parents=True)
 
 data = {}
 for name, file in filenames.items():
