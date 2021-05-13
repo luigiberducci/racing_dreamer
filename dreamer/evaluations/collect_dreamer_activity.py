@@ -91,7 +91,7 @@ def main(args):
 
 
 def parse():
-    tracks = ['austria', 'columbia', 'barcelona', 'gbr', 'treitlstrasse_v2']
+    tracks = ['austria', 'columbia', 'barcelona', 'gbr', 'treitlstrasse_v2', 'circle_cw']
     parser = argparse.ArgumentParser()
     parser.add_argument('--agent', type=str, choices=["dreamer"], required=False, default="dreamer")
     parser.add_argument('--obs_type', type=str, choices=["lidar", "lidar_occupancy"], required=True)
