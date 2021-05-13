@@ -39,7 +39,7 @@ def define_config():
     # General.
     config.datetime = datetime.now().strftime("%m-%d-%Y %H:%M:%S")      # just for logging config
     config.seed = random.randint(2, 10 ** 6)
-    config.logdir = pathlib.Path('dreamer/logs/experiments')
+    config.logdir = pathlib.Path('logs/experiments')
     config.steps = 5e6
     config.eval_every = 1e4
     config.log_every = 1e3

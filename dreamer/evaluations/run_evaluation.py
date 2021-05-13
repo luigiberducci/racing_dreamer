@@ -74,7 +74,7 @@ def make_log_dir(args):
 
 def main(args):
     action_repeat = 8 if args.agent == "dreamer" else 4
-    rendering = False
+    rendering = True
     basedir, writer = make_log_dir(args)
     base_env = make_multi_track_env(args.tracks, action_repeat=action_repeat,
                                     rendering=rendering, is_dreamer=args.agent == "dreamer")

@@ -5,10 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import tensorflow as tf
-import dreamer.tools
-from dreamer.evaluations.make_env import make_single_track_env, make_multi_track_env, wrap_wrt_track
-from dreamer.evaluations.racing_agent import RacingAgent
-from dreamer.tools import lidar_to_image, preprocess
+from evaluations.make_env import make_single_track_env, make_multi_track_env, wrap_wrt_track
+from evaluations.racing_agent import RacingAgent
+from tools import lidar_to_image, preprocess
 
 tf.config.run_functions_eagerly(run_eagerly=True)   # we need it to resume a model without need of same batchlen
 
