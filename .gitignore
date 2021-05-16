@@ -130,3 +130,8 @@ dmypy.json
 
 environment_loop/
 .DS_Store
+
+# Upload
+dreamer/export_log/.*
+dreamer/export_log/*tar
+dreamer/logs/*
