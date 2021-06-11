@@ -76,6 +76,8 @@ def define_config():
     config.pcont_scale = 10.0
     config.weight_decay = 0.0
     config.weight_decay_pattern = r'.*'
+    # Action regularization (https://arxiv.org/abs/2012.06644)
+    config.lambda_temporal = 0.0
     # Training.
     config.batch_size = 50
     config.batch_length = 50
