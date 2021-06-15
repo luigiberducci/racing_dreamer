@@ -108,5 +108,6 @@ def save_trajectory(episodes, outdir, action_repeat, track, checkpoint_id):
     episodes = tools.count_videos(outdir / 'videos')
     positions = episode['pose'][:, :2]
     velocities = episode['velocity'][:, 0]
+    actions = episode['action']
     filename = trajectory_dir / f"trajectory_{episodes}_{track}_checkpoint{checkpoint_id}"
-    np.savez(filename, position=positions, velocity=velocities)
+    np.savez(filename, position=positions, velocity=velocities, actions=actions)
