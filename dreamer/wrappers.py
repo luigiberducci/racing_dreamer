@@ -122,17 +122,24 @@ class ReduceActionSpace:
         self._env = env
         self._low = np.array(low)
         self._high = np.array(high)
+        self._max_ctrl_diff = [0.20, 0.20]  # max perc diff w.r.t. previous action
+        self._last_action = {agent_id: np.array([-1.0, 0.0]) for agent_id in self._env.agent_ids}   # -1 is min speed (0.0), 0.0 is the center angle
 
     def __getattr__(self, name):
         return getattr(self._env, name)
 
-    def _normalize(self, action):
+    def _rescale(self, action):
         return (action + 1) / 2 * (self._high - self._low) + self._low
 
     def step(self, action):
-        original = {agent_id: self._normalize(action[agent_id]) for agent_id in self._env.agent_ids}
+        # the input action is a relative action w.r.t. the previous one
+        action = {agent_id: self._last_action[agent_id] + action[agent_id] * self._max_ctrl_diff for agent_id in self._env.agent_ids}
+        action = {agent_id: np.clip(action[agent_id], -1, +1) for agent_id in self._env.agent_ids}
+        original = {agent_id: self._rescale(action[agent_id]) for agent_id in self._env.agent_ids}
         return self._env.step(original)
 
+    def __reduce__(self):
+        self._last_action = {agent_id: np.array([-1.0, 0.0]) for agent_id in self._env.agent_ids}
 
 class TimeLimit:
 

@@ -213,7 +213,7 @@ def main(config):
     elif config.prefill_agent == 'gap_follower':
         # Prefil strategy: FTG with a fixed low speed (negative value because of shifting in 0,1)
         ftg = GapFollower()
-        fix_speed = -0.96
+        fix_speed = 0.1
         gap_follower_agent = lambda o, d, s: ([np.clip(np.array([fix_speed, ftg.action(o)[-1]]), -1, +1)], None)
         agents = [gap_follower_agent for _ in range(train_env.n_agents)]
     else:
