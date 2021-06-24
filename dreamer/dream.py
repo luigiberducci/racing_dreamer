@@ -37,9 +37,10 @@ def define_config():
     """
     config = tools.AttrDict()
     # General.
-    config.datetime = datetime.now().strftime("%m-%d-%Y %H:%M:%S")      # just for logging config
+    config.datetime = datetime.now().strftime("%m-%d-%Y %H:%M:%S")  # just for logging config
     config.seed = random.randint(2, 10 ** 6)
     config.logdir = pathlib.Path('logs/experiments')
+    config.checkpoint = ''
     config.steps = 5e6
     config.eval_every = 1e4
     config.log_every = 1e3
@@ -160,10 +161,12 @@ def create_log_dirs(config):
     suffix = f"{config.seed}_{time.time()}"
     # create log dirs
     logdir = pathlib.Path(f'{config.logdir}/{prefix}_{model_archs}_{params}_{suffix}')
-    datadir = logdir / 'episodes'                   # where storing the episodes as np files
-    checkpoint_dir = logdir / 'checkpoints'         # where storing model checkpoints
-    best_checkpoint_dir = checkpoint_dir / 'best'   # where storing the best model checkpoint
+    datadir = logdir / 'episodes'  # where storing the episodes as np files
+    checkpoint_dir = logdir / 'checkpoints'  # where storing model checkpoints
+    best_checkpoint_dir = checkpoint_dir / 'best'  # where storing the best model checkpoint
     best_checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    init_checkpoint_dir = checkpoint_dir / 'init'  # where storing the pretrained checkpoint
+    init_checkpoint_dir.mkdir(parents=True, exist_ok=True)
     # save configuration
     with open(logdir / 'config.yaml', 'w') as file:
         yaml.dump(vars(config), file)
@@ -184,12 +187,13 @@ def setup_experiments(config):
     np.random.seed(config.seed)
     tf.random.set_seed(config.seed)
 
+
 def main(config):
     # Setup logging
     setup_experiments(config)
     config.steps = int(config.steps)
     config.logdir, datadir, cp_dir = create_log_dirs(config)
-    #set_logging(config)
+    # set_logging(config)
     writer = tf.summary.create_file_writer(str(config.logdir), max_queue=1000, flush_millis=20000)
     writer.set_as_default()
     print(f"[Info] Logdir {config.logdir}")
@@ -227,18 +231,18 @@ def main(config):
     step = tools.count_steps(datadir, config)
     agent = Dreamer(config, datadir, actspace, obspace, writer)
     # Resume last checkpoint (checkpoints pattern `{checkpoint_dir}/{step}.pkl`
-    checkpoints = sorted(cp_dir.glob('*pkl'), key=lambda f: int(f.name.split('.')[0]))
-    if len(checkpoints):
+    if config.checkpoint != '' and pathlib.Path(config.checkpoint).exists():
         try:
-            agent.load(checkpoints[-1])
-            print('Load checkpoint.')
+            agent.load(config.checkpoint)
+            print(f'Load checkpoint {config.checkpoint}.')
         except:
-            raise Exception(f"the resume of checkpoint {checkpoints[-1]} failed")
+            raise Exception(f"the resume of checkpoint {config.checkpoint} failed, " \
+                            "probably mismatch current agent and checkpoint architecture")
 
     # Train and Evaluate the agent over the simulation process
     print(f'[Info] Simulating agent for {config.steps - step} steps.')
     simulation_state = None
-    best_test_return = 0.0      # for storing the best model so far
+    best_test_return = 0.0  # for storing the best model so far
     while step < config.steps:
         # Evaluation phase
         print('[Info] Start evaluation.')
@@ -259,9 +263,9 @@ def main(config):
         agent.save(cp_dir / f'{step}.pkl')
         # Training phase
         print('[Info] Start collection.')
-        steps = config.eval_every // config.action_repeat       # compute the n steps until next evaluation
-        train_agent = functools.partial(agent, training=True)   # for multi-agent: only 1 agent is training
-        eval_agent = functools.partial(agent, training=False)   # the other ones are fixed in evaluation mode
+        steps = config.eval_every // config.action_repeat  # compute the n steps until next evaluation
+        train_agent = functools.partial(agent, training=True)  # for multi-agent: only 1 agent is training
+        eval_agent = functools.partial(agent, training=False)  # the other ones are fixed in evaluation mode
         training_agents = [train_agent] + [eval_agent for _ in range(train_env.n_agents - 1)]
         simulation_state, _ = tools.simulate(training_agents, train_env, config, datadir, writer, prefix='train',
                                              steps=steps, sim_state=simulation_state, agents_ids=agent_ids)
