@@ -235,6 +235,7 @@ def main(config):
         try:
             agent.load(config.checkpoint)
             print(f'Load checkpoint {config.checkpoint}.')
+            agent.save(cp_dir / 'init' / 'variables.pkl')  # store the initial model
         except:
             raise Exception(f"the resume of checkpoint {config.checkpoint} failed, " \
                             "probably mismatch current agent and checkpoint architecture")
