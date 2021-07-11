@@ -123,7 +123,7 @@ class Dreamer(tools.Module):
             imagine_step = lambda prev, act: self._dynamics.img_step(prev, act)
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
-            actions, action_means, action_bar_means = [], [], []
+            actions, action_modes, action_bar_modes = [], [], []
             last = start
             for hstep in range(self._c.horizon):
                 # Compute action
@@ -131,14 +131,14 @@ class Dreamer(tools.Module):
                 noisy_dist = policy_bar(last)  # action_dist := policy(last+noise)
                 # Predict a step
                 action = dist.sample()
-                mean_dist = dist.mean()
-                mean_noisy_dist = noisy_dist.mean()
+                mode_dist = dist.mode()
+                mode_noisy_dist = noisy_dist.mode()
                 last = imagine_step(last, action)
                 # Append states, actions
                 [s.append(l) for s, l in zip(states, tf.nest.flatten(last))]
                 actions.append(action)
-                action_means.append(mean_dist)
-                action_bar_means.append(mean_noisy_dist)
+                action_modes.append(mode_dist)
+                action_bar_modes.append(mode_noisy_dist)
             # Convert to proper format
             states = [tf.stack(x, 0) for x in states]
             states = tf.nest.pack_sequence_as(start, states)
@@ -162,9 +162,9 @@ class Dreamer(tools.Module):
             action_cost = tf.reduce_sum(action_squared_err, -1)  # sum error on individual act components
             unscaled_action_cost = tf.reduce_mean(action_cost)  # only for scalar summary
             # Here: add action regularization for spatial regularization
-            action_means = tf.stack(action_means[:-1], 0)
-            action_bar_means = tf.stack(action_bar_means[:-1], 0)
-            spatial_action_squared_err = tf.pow(action_means - action_bar_means, 2)
+            action_modes = tf.stack(action_modes[:-1], 0)
+            action_bar_modes = tf.stack(action_bar_modes[:-1], 0)
+            spatial_action_squared_err = tf.pow(action_modes - action_bar_modes, 2)
             spatial_action_cost = tf.reduce_sum(spatial_action_squared_err, -1)
             unscaled_spat_action_cost = tf.reduce_mean(spatial_action_cost)  # only for scalar summary
             # Compute actor loss
