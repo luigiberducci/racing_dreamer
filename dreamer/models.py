@@ -43,7 +43,6 @@ class Dreamer(tools.Module):
         tf.summary.experimental.set_step(step)
         if state is not None and reset.any():
             mask = tf.cast(1 - reset, self._float)[:, None]
-            mask = tf.cast(1 - reset, self._float)[:, None]
             state = tf.nest.map_structure(lambda x: x * mask, state)
         if training:
             if self._should_train(step):  # call it only when training
@@ -117,20 +116,29 @@ class Dreamer(tools.Module):
             flatten = lambda x: tf.reshape(x, [-1] + list(x.shape[2:]))
             start = {k: flatten(v) for k, v in post.items()}
             # Create lambda functions for action and action+noise
-            policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state))).sample()
+            policy = lambda state: self._actor(tf.stop_gradient(self._dynamics.get_feat(state)))
+            policy_bar = lambda state: self._actor(tf.stop_gradient(tf.random.normal(tf.shape(self._dynamics.get_feat(state)),
+                                                                                 self._dynamics.get_feat(state),
+                                                                                 stddev=0.00001)))
             imagine_step = lambda prev, act: self._dynamics.img_step(prev, act)
             # Imagination loop
             states = [[] for _ in tf.nest.flatten(start)]
-            actions, actions_bar = [], []
+            actions, action_means, action_bar_means = [], [], []
             last = start
             for hstep in range(self._c.horizon):
                 # Compute action
-                action = policy(last)  # action_dist := policy(last)
+                dist = policy(last)  # action_dist := policy(last)
+                noisy_dist = policy_bar(last)  # action_dist := policy(last+noise)
                 # Predict a step
+                action = dist.sample()
+                mean_dist = dist.mean()
+                mean_noisy_dist = noisy_dist.mean()
                 last = imagine_step(last, action)
                 # Append states, actions
                 [s.append(l) for s, l in zip(states, tf.nest.flatten(last))]
                 actions.append(action)
+                action_means.append(mean_dist)
+                action_bar_means.append(mean_noisy_dist)
             # Convert to proper format
             states = [tf.stack(x, 0) for x in states]
             states = tf.nest.pack_sequence_as(start, states)
@@ -148,13 +156,21 @@ class Dreamer(tools.Module):
                 bootstrap=value[-1], lambda_=self._c.disclam, axis=0)
             discount = tf.stop_gradient(tf.math.cumprod(tf.concat(
                 [tf.ones_like(pcont[:1]), pcont[:-2]], 0), 0))
-            # Here: add action regularization for smooth control (https://arxiv.org/abs/2012.06644)
+            # Here: add action regularization for temporal smooth control
             actions = tf.stack(actions, 0)  # Convert proper format
             action_squared_err = tf.pow(actions[1:] - actions[:-1], 2)  # squared error between each action and its succ
             action_cost = tf.reduce_sum(action_squared_err, -1)  # sum error on individual act components
             unscaled_action_cost = tf.reduce_mean(action_cost)  # only for scalar summary
+            # Here: add action regularization for spatial regularization
+            action_means = tf.stack(action_means[:-1], 0)
+            action_bar_means = tf.stack(action_bar_means[:-1], 0)
+            spatial_action_squared_err = tf.pow(action_means - action_bar_means, 2)
+            spatial_action_cost = tf.reduce_sum(spatial_action_squared_err, -1)
+            unscaled_spat_action_cost = tf.reduce_mean(spatial_action_cost)  # only for scalar summary
             # Compute actor loss
-            actor_loss = -tf.reduce_mean(discount * (returns - self._c.lambda_temporal * action_cost))
+            actor_loss = -tf.reduce_mean(discount * (returns
+                                                     - self._c.lambda_temporal * action_cost
+                                                     - self._c.lambda_spatial * spatial_action_cost))
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
         with tf.GradientTape() as value_tape:
@@ -171,7 +187,7 @@ class Dreamer(tools.Module):
             if self._c.log_scalars:
                 self._scalar_summaries(
                     data, feat, prior_dist, post_dist, likes, div,
-                    model_loss, value_loss, actor_loss, unscaled_action_cost, model_norm, value_norm,
+                    model_loss, value_loss, actor_loss, unscaled_action_cost, unscaled_spat_action_cost, model_norm, value_norm,
                     actor_norm)
             if tf.equal(log_images, True):
                 self._image_summaries(data, embed, image_pred)
@@ -255,8 +271,8 @@ class Dreamer(tools.Module):
 
     def _scalar_summaries(
             self, data, feat, prior_dist, post_dist, likes, div,
-            model_loss, value_loss, actor_loss, unscaled_action_cost, model_norm, value_norm,
-            actor_norm):
+            model_loss, value_loss, actor_loss, unscaled_temp_action_cost, unscaled_spat_action_cost, model_norm,
+            value_norm, actor_norm):
         self._metrics['model_grad_norm'].update_state(model_norm)
         self._metrics['value_grad_norm'].update_state(value_norm)
         self._metrics['actor_grad_norm'].update_state(actor_norm)
@@ -268,7 +284,8 @@ class Dreamer(tools.Module):
         self._metrics['model_loss'].update_state(model_loss)
         self._metrics['value_loss'].update_state(value_loss)
         self._metrics['actor_loss'].update_state(actor_loss)
-        self._metrics['unscaled_action_cost'].update_state(unscaled_action_cost)
+        self._metrics['unscaled_temporal_action_cost'].update_state(unscaled_temp_action_cost)
+        self._metrics['unscaled_spatial_action_cost'].update_state(unscaled_spat_action_cost)
         self._metrics['action_ent'].update_state(self._actor(feat).entropy())
 
     def _image_summaries(self, data, embed, image_pred):
