@@ -29,7 +29,7 @@ def wrap_wrt_track(env, action_repeat, outdir, writer, track, checkpoint_id, sav
   env = wrappers.OccupancyMapObs(env)
   render_callbacks = []
   render_callbacks.append(lambda videos: save_eval_videos(videos, outdir / 'videos', action_repeat, track, checkpoint_id))
-  env = wrappers.Render(env, render_callbacks, follow_view=False)
+  env = wrappers.Render(env, render_callbacks, follow_view=True)
   callbacks = []
   if save_trajectories:
     callbacks.append(lambda episodes: save_trajectory(episodes, outdir, action_repeat, track, checkpoint_id))

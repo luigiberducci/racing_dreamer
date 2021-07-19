@@ -63,11 +63,13 @@ def graph_summary(writer, fn, *args):
 
 
 @tfplot.autowrap(figsize=(2, 2))
-def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, min_v=-1, max_v=+1, color='red'):
+def plot_scatter(x: np.ndarray, y: np.ndarray, *, ax, min_v=-1, max_v=+1, color='red', text=None):
     margin = .1
-    ax.scatter(x, y, s=5, c=color)
+    ax.scatter(x, y, s=2, c=color)
     ax.set_xlim(min_v - margin, max_v + margin)
     ax.set_ylim(min_v - margin, max_v + margin)
+    if text is not None:
+        ax.text(min_v, min_v, f'{text:.6f}')
     ax.axis('off')
 
 
@@ -79,7 +81,7 @@ def plot_step(x: np.ndarray, y: np.ndarray, *, ax, color='k', min_y=-1, max_y=1)
     ax.set_ylim(min_y - margin, max_y + margin)
 
 
-def lidar_to_image(scan, min_v=-1, max_v=+1, color: str = "k"):
+def lidar_to_image(scan, min_v=-1, max_v=+1, color: str = "k", text=None):
     # shift pi/2 just to align for visualization
     angles = tf.linspace(math.pi / 2 - math.radians(270.0 / 2),
                          math.pi / 2 + math.radians(270.0 / 2),
@@ -90,7 +92,11 @@ def lidar_to_image(scan, min_v=-1, max_v=+1, color: str = "k"):
         for t in range(scan.shape[1]):
             x = scan[b, t, :] * tf.cos(angles)
             y = scan[b, t, :] * tf.sin(angles)
-            data = plot_scatter(x, y, min_v=min_v, max_v=max_v, color=color)[:, :, :3]  # no alpha channel
+            if text is not None:
+                txt = text[b, t]
+            else:
+                txt = None
+            data = plot_scatter(x, y, min_v=min_v, max_v=max_v, color=color, text=txt)[:, :, :3]  # no alpha channel
             single_episode.append(data)
         video = tf.stack(single_episode)
         batch_video.append(video)

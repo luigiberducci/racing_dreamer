@@ -15,16 +15,17 @@ data = np.load(file)
 assert 'actions' in data.keys()
 
 actions = data['actions']
+selection = actions[:steps, :]
 
 import matplotlib.pyplot as plt
 plt.subplot(2, 1, 1)
-x = np.arange(actions.shape[0] if steps is None else steps)
-plt.plot(x, actions[:steps, 0], label="motor")
+x = np.arange(selection.shape[0])
+plt.plot(x, selection[:, 0], label="motor")
 plt.title("motor")
 
 plt.subplot(2, 1, 2)
-plt.plot(x, actions[:steps, 1], label="steering")
+plt.plot(x, selection[:, 1], label="steering")
 plt.title("steering")
 
 logdir = file.parents[0]
-plt.savefig(f"{logdir}/actions_steps{steps}.pdf")
+plt.savefig(f"{logdir}/actions_steps{selection.shape[0]}.pdf")

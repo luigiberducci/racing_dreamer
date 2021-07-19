@@ -69,12 +69,14 @@ def make_log_dir(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     writer = tf.summary.create_file_writer(str(out_dir), max_queue=1000, flush_millis=20000)
     writer.set_as_default()
+    with open(out_dir / "cmd.txt", "w+") as f:
+        f.write(args.cmd)
     return out_dir, writer
 
 
 def main(args):
     action_repeat = 8 if args.agent == "dreamer" else 4
-    rendering = True
+    rendering = False
     basedir, writer = make_log_dir(args)
     base_env = make_multi_track_env(args.tracks, action_repeat=action_repeat,
                                     rendering=rendering, is_dreamer=args.agent == "dreamer")
@@ -114,7 +116,9 @@ def parse():
 
 
 if __name__ == "__main__":
+    import sys
     init = time.time()
     args = parse()
+    args.cmd = ' '.join(sys.argv)
     main(args)
     print(f"\n[Info] Elapsed Time: {time.time() - init:.3f} seconds")
