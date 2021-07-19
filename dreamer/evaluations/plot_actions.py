@@ -28,4 +28,4 @@ plt.plot(x, selection[:, 1], label="steering")
 plt.title("steering")
 
 logdir = file.parents[0]
-plt.savefig(f"{logdir}/actions_steps{selection.shape[0]}.pdf")
+plt.savefig(f"{logdir}/{file.stem}_Steps{selection.shape[0]}.pdf")

@@ -81,7 +81,8 @@ def main(args):
             recon = image_pred.mode() + 0.5
             # compute reconstruction error
             mses = np.mean((truth - recon) ** 2, axis=-1)  # format BxT
-            truth_imgs = lidar_to_image(truth, min_v=-0.5, max_v=0.5)
+            steps = np.arange(mses.shape[1])[None]
+            truth_imgs = lidar_to_image(truth, min_v=-0.5, max_v=0.5, text=steps)
             recon_imgs = lidar_to_image(recon, min_v=-0.5, max_v=0.5, text=mses)
             print(f"[Info] Created frames. Time: {time.time()-init:.3f} sec")
 
@@ -99,7 +100,7 @@ def main(args):
                 f'ffmpeg -y -f rawvideo -vcodec rawvideo',
                 f'-r {fps:.02f} -s {w}x{h} -pix_fmt {pxfmt} -i - -filter_complex',
                 f'[0:v]split[x][z];[z]palettegen[y];[x]fifo[x];[x][y]paletteuse',
-                f'-r {fps:.02f} -f gif - {outfile}.gif'])
+                f'-r {fps:.02f} {outfile}.mp4'])
             proc = Popen(cmd.split(' '), stdin=PIPE, stdout=PIPE, stderr=PIPE)
             for image in frames_s2s:
                 proc.stdin.write(image.tostring())
