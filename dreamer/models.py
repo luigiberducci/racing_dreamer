@@ -136,7 +136,7 @@ class Dreamer(tools.Module):
                 last = imagine_step(last, action)
                 # Append states, actions
                 [s.append(l) for s, l in zip(states, tf.nest.flatten(last))]
-                actions.append(action)
+                actions.append(tf.expand_dims(action[:, 1], -1))    # note: smooth only the steering command (dim 1)
                 action_modes.append(mode_dist)
                 action_bar_modes.append(mode_noisy_dist)
             # Convert to proper format
@@ -168,6 +168,8 @@ class Dreamer(tools.Module):
             spatial_action_cost = tf.reduce_sum(spatial_action_squared_err, -1)
             unscaled_spat_action_cost = tf.reduce_mean(spatial_action_cost)  # only for scalar summary
             # Compute actor loss
+            assert returns.shape == action_cost.shape
+            assert returns.shape == spatial_action_cost.shape
             actor_loss = -tf.reduce_mean(discount * (returns
                                                      - self._c.lambda_temporal * action_cost
                                                      - self._c.lambda_spatial * spatial_action_cost))
