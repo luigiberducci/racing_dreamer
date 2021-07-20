@@ -16,11 +16,13 @@ for gpu in tf.config.experimental.list_physical_devices('GPU'):
   tf.config.experimental.set_memory_growth(gpu, True)
 
 def make_log_dir(args):
-  out_dir = args.outdir / f'reconstructions_dreamer_FlipObs{args.flip_obs}_{time.time()}'
-  out_dir.mkdir(parents=True, exist_ok=True)
-  with open(out_dir / "cmd.txt", "w+") as f:
+    prefix = 'reconstructions_dreamer'
+    params = f'FlipObs{args.flip_obs}_MedFilter{args.filter_size if args.med_filter else args.med_filter}'
+    out_dir = args.outdir / f'{prefix}_{params}_{time.time()}'
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "cmd.txt", "w+") as f:
       f.write(args.cmd)
-  return out_dir
+    return out_dir
 
 
 def main(args):
@@ -46,6 +48,11 @@ def main(args):
         lidars = lidars.astype(np.float32)
         if args.flip_obs:
             lidars = np.flip(lidars, axis=-1)
+        if args.med_filter:
+            from scipy.ndimage import median_filter
+            # apply median filter to each scan (ie, each row of the np dataset)
+            lidars = np.apply_along_axis(lambda row: median_filter(row, size=args.filter_size), 1, lidars)
+
         # actions: revert the processing on real-hw
         # steer: clip +-0.42, scale to +-1
         # speed: clip to 0-5. m/s, scale to +-1 according to increase/decrease of speed w.r.t the prev step
@@ -124,7 +131,9 @@ def parse():
     parser.add_argument("--indir", type=pathlib.Path, help="dir containing numpy file of experimental data",
                         required=True)
     parser.add_argument('--outdir', type=pathlib.Path, required=True)
-    parser.add_argument('-flip_obs', action='store_true')
+    parser.add_argument('-flip_obs', action='store_true', help='flip the lidar observation')
+    parser.add_argument('-med_filter', action='store_true', help='apply median filter to lidar obs')
+    parser.add_argument('--filter_size', type=int, help='size of the median filter', default=25)
     return parser.parse_args()
 
 
