@@ -1,6 +1,8 @@
 import numpy as np
 import argparse
 import pathlib
+import time
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--file", type=pathlib.Path, help="numpy file with actions stored as key `actions`", required=True)

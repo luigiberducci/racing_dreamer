@@ -54,7 +54,7 @@ def define_config():
     config.track = 'austria'
     config.task = 'max_progress'
     config.action_repeat = 4
-    config.eval_episodes = 5
+    config.eval_episodes = 10
     config.time_limit_train = 2000
     config.time_limit_test = 4000
     config.prefill_agent = 'gap_follower'
