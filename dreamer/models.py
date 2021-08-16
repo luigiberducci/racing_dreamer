@@ -158,9 +158,12 @@ class Dreamer(tools.Module):
                 [tf.ones_like(pcont[:1]), pcont[:-2]], 0), 0))
             # Here: add action regularization for temporal smooth control
             actions = tf.stack(actions, 0)  # Convert proper format
-            action_squared_err = tf.pow(actions[1:] - actions[:-1], 2)  # squared error between each action and its succ
-            action_cost = tf.reduce_sum(action_squared_err, -1)  # sum error on individual act components
-            unscaled_action_cost = tf.reduce_mean(action_cost)  # only for scalar summary
+            action_squared = tf.pow(actions[:-1], 2)  # actions squared
+            action_squared = tf.reduce_sum(action_squared, -1)  # sum individual act components
+            delta_action_squared = tf.pow(actions[1:] - actions[:-1], 2)  # squared error between each action and its succ
+            delta_action_squared = tf.reduce_sum(delta_action_squared, -1)  # sum error on individual act components
+            action_magnitude_mean = tf.reduce_mean(delta_action_squared)  # only for scalar summary
+            action_smoothness_mean = tf.reduce_mean(delta_action_squared)  # only for scalar summary
             # Here: add action regularization for spatial regularization
             action_modes = tf.stack(action_modes[:-1], 0)
             action_bar_modes = tf.stack(action_bar_modes[:-1], 0)
@@ -168,10 +171,12 @@ class Dreamer(tools.Module):
             spatial_action_cost = tf.reduce_sum(spatial_action_squared_err, -1)
             unscaled_spat_action_cost = tf.reduce_mean(spatial_action_cost)  # only for scalar summary
             # Compute actor loss
-            assert returns.shape == action_cost.shape
+            assert returns.shape == action_squared.shape
+            assert returns.shape == delta_action_squared.shape
             assert returns.shape == spatial_action_cost.shape
             actor_loss = -tf.reduce_mean(discount * (returns
-                                                     - self._c.lambda_temporal * action_cost
+                                                     - self._c.lambda_magnitude * action_squared
+                                                     - self._c.lambda_smoothness * delta_action_squared
                                                      - self._c.lambda_spatial * spatial_action_cost))
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
@@ -189,7 +194,8 @@ class Dreamer(tools.Module):
             if self._c.log_scalars:
                 self._scalar_summaries(
                     data, feat, prior_dist, post_dist, likes, div,
-                    model_loss, value_loss, actor_loss, unscaled_action_cost, unscaled_spat_action_cost, model_norm, value_norm,
+                    model_loss, value_loss, actor_loss, action_magnitude_mean, action_smoothness_mean,
+                    unscaled_spat_action_cost, model_norm, value_norm,
                     actor_norm)
             if tf.equal(log_images, True):
                 self._image_summaries(data, embed, image_pred)
@@ -273,7 +279,7 @@ class Dreamer(tools.Module):
 
     def _scalar_summaries(
             self, data, feat, prior_dist, post_dist, likes, div,
-            model_loss, value_loss, actor_loss, unscaled_temp_action_cost, unscaled_spat_action_cost, model_norm,
+            model_loss, value_loss, actor_loss, action_magnitude_mean, action_smoothness_mean, unscaled_spat_action_cost, model_norm,
             value_norm, actor_norm):
         self._metrics['model_grad_norm'].update_state(model_norm)
         self._metrics['value_grad_norm'].update_state(value_norm)
@@ -286,7 +292,8 @@ class Dreamer(tools.Module):
         self._metrics['model_loss'].update_state(model_loss)
         self._metrics['value_loss'].update_state(value_loss)
         self._metrics['actor_loss'].update_state(actor_loss)
-        self._metrics['unscaled_temporal_action_cost'].update_state(unscaled_temp_action_cost)
+        self._metrics['action_magnitude_mean'].update_state(action_magnitude_mean)
+        self._metrics['action_temporal_smoothness_mean'].update_state(action_smoothness_mean)
         self._metrics['unscaled_spatial_action_cost'].update_state(unscaled_spat_action_cost)
         self._metrics['action_ent'].update_state(self._actor(feat).entropy())
 

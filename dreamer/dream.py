@@ -78,6 +78,7 @@ def define_config():
     config.weight_decay = 0.0
     config.weight_decay_pattern = r'.*'
     # Action regularization (https://arxiv.org/abs/2012.06644)
+    config.lambda_action_cost = 0.0
     config.lambda_temporal = 0.0
     config.lambda_spatial = 0.0
     # Training.
