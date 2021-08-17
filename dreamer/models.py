@@ -279,8 +279,8 @@ class Dreamer(tools.Module):
 
     def _scalar_summaries(
             self, data, feat, prior_dist, post_dist, likes, div,
-            model_loss, value_loss, actor_loss, action_magnitude_mean, action_smoothness_mean, unscaled_spat_action_cost, model_norm,
-            value_norm, actor_norm):
+            model_loss, value_loss, actor_loss, action_magnitude_mean, action_temporal_smoothness_mean,
+            action_spatial_smoothness_mean, model_norm, value_norm, actor_norm):
         self._metrics['model_grad_norm'].update_state(model_norm)
         self._metrics['value_grad_norm'].update_state(value_norm)
         self._metrics['actor_grad_norm'].update_state(actor_norm)
@@ -293,8 +293,8 @@ class Dreamer(tools.Module):
         self._metrics['value_loss'].update_state(value_loss)
         self._metrics['actor_loss'].update_state(actor_loss)
         self._metrics['action_magnitude_mean'].update_state(action_magnitude_mean)
-        self._metrics['action_temporal_smoothness_mean'].update_state(action_smoothness_mean)
-        self._metrics['unscaled_spatial_action_cost'].update_state(unscaled_spat_action_cost)
+        self._metrics['action_temporal_smoothness_mean'].update_state(action_temporal_smoothness_mean)
+        self._metrics['action_spatial_smoothness_mean'].update_state(action_spatial_smoothness_mean)
         self._metrics['action_ent'].update_state(self._actor(feat).entropy())
 
     def _image_summaries(self, data, embed, image_pred):
