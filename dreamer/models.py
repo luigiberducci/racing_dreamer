@@ -176,7 +176,7 @@ class Dreamer(tools.Module):
             assert returns.shape == spatial_action_cost.shape
             actor_loss = -tf.reduce_mean(discount * (returns
                                                      - self._c.lambda_action_cost * action_squared
-                                                     - self._c.lambda_smoothness * delta_action_squared
+                                                     - self._c.lambda_temporal * delta_action_squared
                                                      - self._c.lambda_spatial * spatial_action_cost))
             actor_loss /= float(self._strategy.num_replicas_in_sync)
 
