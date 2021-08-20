@@ -88,6 +88,7 @@ def main(args):
             recon = image_pred.mode() + 0.5
             # compute reconstruction error
             mses = np.mean((truth - recon) ** 2, axis=-1)  # format BxT
+            loglikelihood = image_pred.log_prob(data['lidar'])
             steps = np.arange(mses.shape[1])[None]
             truth_imgs = lidar_to_image(truth, min_v=-0.5, max_v=0.5, text=steps)
             recon_imgs = lidar_to_image(recon, min_v=-0.5, max_v=0.5, text=mses)
@@ -116,8 +117,8 @@ def main(args):
                 raise IOError('\n'.join([' '.join(cmd), err.decode('utf8')]))
             del proc
             print(f"[Info] GIF produced. Time: {time.time()-init:.3f} sec")
-
-            plt.plot(range(mses.shape[1]), mses[0], label=f"cp: {cp.stem}")
+            plt.title("Log Prob Reconstruction")
+            plt.plot(range(mses.shape[1]), loglikelihood[0], label=f"cp: {cp.stem}")
         plt.legend()
         outfile = basedir / file.stem
         plt.savefig(str(outfile) + '.pdf')
@@ -142,5 +143,9 @@ if __name__ == "__main__":
     t0 = time.time()
     args = parse()
     args.cmd = ' '.join(sys.argv)
-    main(args)
+    for dataset in [pathlib.Path('/home/luigi/Desktop/dreamer_curriculum_treitl_19072021/data/dataset0/np')]:
+        for flip in [True, False]:
+            args.indir = dataset
+            args.flip_obs = flip
+            main(args)
     print(f"\n[Info] Elapsed Time: {time.time() - t0:.3f} seconds")

@@ -223,7 +223,7 @@ def summarize_collection(metrics_dict, config, datadir, writer, prefix):
 
 
 def count_videos(directory):
-    filenames = directory.glob('**/*.mp4')
+    filenames = directory.glob('**/birds*.mp4') #count only birds-eye videos, to avoid double counting
     return sum(1 for _ in filenames)
 
 
