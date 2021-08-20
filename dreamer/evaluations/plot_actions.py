@@ -29,3 +29,16 @@ plt.title("steering")
 
 logdir = file.parents[0]
 plt.savefig(f"{logdir}/{file.stem}_Steps{selection.shape[0]}.pdf")
+
+plt.clf()
+bins = np.linspace(-1, +1, 25)
+plt.subplot(2, 1, 1)
+plt.hist(selection[:, 0], bins=bins, label="motor")
+plt.title("motor")
+
+plt.subplot(2, 1, 2)
+plt.hist(selection[:, 1], bins=bins, label="steering")
+plt.title("steering")
+
+logdir = file.parents[0]
+plt.savefig(f"{logdir}/{file.stem}_Steps{selection.shape[0]}_distr.pdf")
