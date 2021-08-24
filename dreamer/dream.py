@@ -255,7 +255,7 @@ def main(config):
                                        episodes=config.eval_episodes, agents_ids=agent_ids)
         writer.flush()
         # Save best model
-        if cum_reward > best_test_return:
+        if cum_reward >= best_test_return:
             best_test_return = cum_reward
             print(f'[Info] Found New Best Model: {best_test_return:.5f}')
             for model in [agent._encode, agent._dynamics, agent._decode, agent._reward, agent._actor]:
