@@ -37,3 +37,11 @@ class RacingAgent():
 
     def action(self, obs, **kwargs):
         return self._agent.action(obs, **kwargs)
+
+    @property
+    def modules(self):
+        from evaluations.dreamer import RacingDreamer
+        if isinstance(self._agent, RacingDreamer):
+            return [self._agent._encode, self._agent._dynamics, self._agent._decode, self._agent._reward,
+                    self._agent._actor]
+        return []

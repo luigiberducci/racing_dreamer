@@ -9,18 +9,19 @@ import time
 from racing_agent import RacingAgent
 from make_env import make_multi_track_env, wrap_wrt_track
 
-
 tf.config.run_functions_eagerly(run_eagerly=True)  # we need it to resume a model without need of same batchlen
 
 for gpu in tf.config.experimental.list_physical_devices('GPU'):
     tf.config.experimental.set_memory_growth(gpu, True)
 
 
-def copy_checkpoint(agent, checkpoint_file, outdir, checkpoint_id):
-    if agent in ["dreamer", "sac", "ppo"]:
+def copy_checkpoint(agent_name, agent, checkpoint_file, outdir, checkpoint_id):
+    if agent_name in ["dreamer", "sac", "ppo"]:
         cp_dir = outdir / f'checkpoints/{checkpoint_id}'
         cp_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(checkpoint_file, cp_dir)  # copy file
+        for model in agent.modules:
+            model.save(cp_dir / f'{model._name}.pkl')
     else:
         cp_dir = outdir / 'checkpoints'  # dest dir must not exist before
         cp_dir.mkdir(parents=True, exist_ok=True)
@@ -92,7 +93,7 @@ def main(args):
         for i, checkpoint in enumerate(checkpoints):
             # load the model checkpoint and copy it to the log dir
             agent.load(checkpoint)
-            copy_checkpoint(args.agent, checkpoint, basedir, checkpoint_id=i + 1)
+            copy_checkpoint(args.agent, agent, checkpoint, basedir, checkpoint_id=i + 1)
             eval_agent(base_env, agent, action_repeat, basedir, writer, i, save_trajectories=args.save_trajectories)
 
 
@@ -117,6 +118,7 @@ def parse():
 
 if __name__ == "__main__":
     import sys
+
     init = time.time()
     args = parse()
     args.cmd = ' '.join(sys.argv)
