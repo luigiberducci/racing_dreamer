@@ -88,13 +88,25 @@ def main(args):
     else:
         # find all checkpoints in `checkpoint_dir` for the given agent` and training track
         checkpoints = glob_checkpoints(args.checkpoint_dir, args.trained_on, args.agent, args.obs_type)
-        agent = RacingAgent(args.agent, checkpoints[0], obs_type=args.obs_type, action_dist=args.action_dist)
+        found_valid_cp = False
+        for checkpoint in checkpoints:
+            try:
+                agent = RacingAgent(args.agent, checkpoint, obs_type=args.obs_type, action_dist=args.action_dist)
+                found_valid_cp = True
+                break
+            except Exception:
+                pass
+        if not found_valid_cp:
+            raise ValueError("all the checkpoints do not match the actual implementation, try rollback to prev versions")
         # learned methods (dreamer, mfree) iterate over checkpoint list
         for i, checkpoint in enumerate(checkpoints):
             # load the model checkpoint and copy it to the log dir
-            agent.load(checkpoint)
-            copy_checkpoint(args.agent, agent, checkpoint, basedir, checkpoint_id=i + 1)
-            eval_agent(base_env, agent, action_repeat, basedir, writer, i, save_trajectories=args.save_trajectories)
+            try:
+                agent.load(checkpoint)
+                copy_checkpoint(args.agent, agent, checkpoint, basedir, checkpoint_id=i + 1)
+                eval_agent(base_env, agent, action_repeat, basedir, writer, i, save_trajectories=args.save_trajectories)
+            except:
+                print(f"[Skip] Not able to load checkpoint: {checkpoint}")
 
 
 def parse():

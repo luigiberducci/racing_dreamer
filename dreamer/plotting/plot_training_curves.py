@@ -7,7 +7,7 @@ import numpy as np
 
 from aggregators import MeanStd
 from utils import load_runs
-from log_parsers import ModelFreeParser, DreamerParser
+from log_parsers import ModelFreeParser, DreamerParser, DreamerActRegularizedParser
 
 from structs import LONG_TRACKS_DICT, ALL_METHODS_DICT, BEST_MFREE_PERFORMANCES, \
     BEST_DREAMER_PERFORMANCES, COLORS, FONTSIZE
@@ -34,7 +34,7 @@ def plot_filled_curve(args, runs, axes, aggregator):
             if method in COLORS.keys():
                 color = COLORS[method]
             else:
-                color = '#fffff'
+                color = '#377eb8'
             filter_runs = [r for r in track_runs if r.method == method]
             if len(filter_runs) > 0:
                 x, mean, min, max = aggregator(filter_runs, args.binning)
@@ -45,7 +45,7 @@ def plot_filled_curve(args, runs, axes, aggregator):
                     f"\t[Info] Track: {track}, Method: {method}, Mean Max Progress: {np.max(mean)}, Max progress: {np.max(max)}")
         # plot baselines
         min_x = np.min(np.concatenate([r.x for r in track_runs]))
-        max_x = np.min([8000000, np.max(np.concatenate([r.x for r in track_runs]))])
+        max_x = int(np.min([args.max_x, np.max(np.concatenate([r.x for r in track_runs]))]))
         if args.show_mfree_baselines:
             for j, (name, value) in enumerate(BEST_MFREE_PERFORMANCES[track].items()):
                 if name in COLORS.keys():
@@ -67,7 +67,8 @@ def plot_filled_curve(args, runs, axes, aggregator):
         # keep only axis, remove top/right
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.set_xticks(range(0, 8000001, 2000000))
+        ax.set_xticks(range(0, max_x + 1, args.xtick_freq))
+        ax.set_xlim(0, max_x)
         for item in [ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels():
             item.set_fontsize(FONTSIZE)
 
@@ -76,7 +77,7 @@ def main(args):
     assert len(args.hbaseline_names) == len(args.hbaseline_values)
     tag = "test/progress_mean"
     args.ylabel = args.ylabel if args.ylabel != "" else tag
-    runs = load_runs(args, [DreamerParser(), ModelFreeParser()], tag=tag)
+    runs = load_runs(args, [DreamerParser(), ModelFreeParser(), DreamerActRegularizedParser("La")], tag=tag)
     tracks = sorted(set([r.train_track for r in runs]))
     args.outdir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -103,6 +104,8 @@ def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--indir', nargs='+', type=pathlib.Path, required=True)
     parser.add_argument('--outdir', type=pathlib.Path, required=True)
+    parser.add_argument('--max_x', type=int, default=8e6)
+    parser.add_argument('--xtick_freq', type=int, default=2e6)
     parser.add_argument('--xlabel', type=str, default="")
     parser.add_argument('--ylabel', type=str, default="")
     parser.add_argument('--binning', type=int, default=15000)

@@ -1,3 +1,4 @@
+import re
 from abc import abstractmethod
 from typing import Tuple
 from structs import OBSTYPE_DICT, ALL_VARIANTS_DICT
@@ -66,6 +67,42 @@ class DreamerParser(Parser):
         # create method based on group-by parameter
         if self._param is not None:
             method = f'{base_algo}_{self._param}_{current_params[self._param]}'
+        else:
+            method = f'{base_algo}'
+        return track, method, seed
+
+
+class DreamerActRegularizedParser(Parser):
+    parameters = {'horizon': 'H', 'batch_length': 'Bl', 'action_repeat': 'Ar',
+                  'La': 'La', 'Lt': 'Lt', 'Ls': 'Ls'}
+
+    def __init__(self, gby_parameter=None):
+        """
+        Return the parsed experiment name, grouping by a parameter (e.g. horizon, batch_length)
+        :param gby_parameter: parameter for group by. If `None` gby method
+        """
+        assert gby_parameter is None or gby_parameter in self.parameters.keys()
+        self._param = gby_parameter
+
+    def __call__(self, logdir):
+        splitted = logdir.split('_')
+        if len(splitted) == 14:  # logdir: track_dreamer_max_progress_method_actor_La_Lt_Ls_Ar_Bl_H_seed_timestamp
+            track, algo, _, _, method, actor, la, lt, ls, action_repeat, batch_len, horizon, seed, _ = splitted
+            base_algo = algo
+        else:
+            raise NotImplementedError(f'cannot parse {logdir}')
+        current_params = {
+            'horizon': int(''.join(filter(str.isdigit, horizon))),
+            'batch_length': int(''.join(filter(str.isdigit, batch_len))),
+            'action_repeat': int(''.join(filter(str.isdigit, action_repeat))),
+            'La': float(re.findall("\d+\.\d+", la)[0]),
+            'Lt': float(re.findall("\d+\.\d+", lt)[0]),
+            'Ls': float(re.findall("\d+\.\d+", ls)[0])
+        }
+        seed = int(seed)
+        # create method based on group-by parameter
+        if self._param is not None:
+            method = f'{base_algo},{self._param}={current_params[self._param]}'
         else:
             method = f'{base_algo}'
         return track, method, seed

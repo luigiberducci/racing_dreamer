@@ -5,7 +5,8 @@ COLORS = {
     'dreamer+distance': '#377eb8', 'dreamer+occupancy': '#4daf4a', 'dreamer': '#377eb8',
     'd4pg': '#984ea3', 'mpo': '#e41a1c',
     'lstm-ppo': '#ff7f00', 'ppo': '#a65628',
-    'sac': '#888888', 'ftg': '#fdbf6f'
+    'sac': '#888888', 'ftg': '#fdbf6f',
+
 }
 FONTSIZE=14
 OBSTYPE_DICT = {"lidar": "distance", "lidar_occupancy": "occupancy", "lidaroccupancy": "occupancy", }
