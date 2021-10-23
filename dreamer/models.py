@@ -162,7 +162,7 @@ class Dreamer(tools.Module):
             action_squared = tf.reduce_sum(action_squared, -1)  # sum individual act components
             delta_action_squared = tf.pow(actions[1:] - actions[:-1], 2)  # squared error between each action and its succ
             delta_action_squared = tf.reduce_sum(delta_action_squared, -1)  # sum error on individual act components
-            action_magnitude_mean = tf.reduce_mean(delta_action_squared)  # only for scalar summary
+            action_magnitude_mean = tf.reduce_mean(action_squared)  # only for scalar summary
             action_smoothness_mean = tf.reduce_mean(delta_action_squared)  # only for scalar summary
             # Here: add action regularization for spatial regularization
             action_modes = tf.stack(action_modes[:-1], 0)

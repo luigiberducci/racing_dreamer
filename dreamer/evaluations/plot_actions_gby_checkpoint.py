@@ -9,18 +9,25 @@ import matplotlib.pyplot as plt
 
 TICK_LABEL_SIZE = 18
 TITLE_LABEL_SIZE = 28
-AXIS_LABEL_SIZE = 26
-FIGSIZE=(16, 4)
+AXIS_LABEL_SIZE = 22
+FIGSIZE=(18, 3)
 
-CP_LABELS = {1: "La=0.0,Lt=0.0",
-             2: "La=0.5,Lt=5.0",
-             4: "La=1.0,Lt=5.0",
-             5: "La=5.0,Lt=5.0"}
+CP_LABELS = {1: r"$\alpha=0.0,\beta=0.0$",
+             2: r"$\alpha=0.5,\beta=5.0$",
+             4: r"$\alpha=1.0,\beta=5.0$",
+             5: r"$\alpha=5.0,\beta=5.0$"
+             }
+
+CP_colors = {1: "tab:blue",
+             2: "tab:orange",
+             4: "tab:green",
+             5: "tab:red"
+             }
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--indir", type=pathlib.Path, help="where there are npz files with actions as key `actions`")
 parser.add_argument("--xlabel", type=str, default="Steering")
-parser.add_argument("--ylabel", type=str, default="Normalized Count")
+parser.add_argument("--ylabel", type=str, default="Norm. Count")
 args = parser.parse_args()
 
 indir = args.indir
@@ -50,15 +57,15 @@ fig, axes = plt.subplots(nrows=1, ncols=len(all_data.keys()), figsize=FIGSIZE)
 plt.tight_layout(pad=3.5)
 
 sort_ids = sorted(list(all_data.keys()))
-bins = np.linspace(-1, +1, 10)
+bins = np.linspace(-1, +1, 20)
 for i, (cp_id, ax) in enumerate(zip(sort_ids, axes)):
-    ax.hist(all_data[cp_id], bins=bins, label=CP_LABELS[cp_id],
+    ax.hist(all_data[cp_id], bins=bins, label=CP_LABELS[cp_id], color=CP_colors[cp_id],
             density=True, edgecolor='w')
     ax.set_ylim(0, 3)
     ax.set_xticks([-1, 0, +1])
     ax.set_yticks([])
     ax.set_xlabel(args.xlabel)
-    ax.set_title(CP_LABELS[cp_id])
+    #ax.set_title(CP_LABELS[cp_id])
     ax.tick_params(axis='x', labelsize=TICK_LABEL_SIZE)
     for spine in ['right', 'top']:
         ax.spines[spine].set_visible(False)
